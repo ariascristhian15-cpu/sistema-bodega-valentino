@@ -1,0 +1,345 @@
+/* ==========================================================================
+   ESTILOS PERSONALIZADOS - SISTEMA DE GESTIÓN BODEGA VALENTINO
+   Optimizado para Mostrador Móvil, Tablet y Escritorio
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Paletas de acento (temas visuales) — Custom Properties
+   -------------------------------------------------------------------------- */
+:root,
+[data-accent="azul"] {
+  --brand-50: #eff6ff;
+  --brand-100: #dbeafe;
+  --brand-200: #bfdbfe;
+  --brand-300: #93c5fd;
+  --brand-400: #60a5fa;
+  --brand-500: #3b82f6;
+  --brand-600: #2563eb;
+  --brand-700: #1d4ed8;
+  --brand-800: #1e40af;
+  --brand-900: #1e3a8a;
+  --brand-950: #172554;
+  --brand-50-rgb: 239, 246, 255;
+  --brand-100-rgb: 219, 234, 254;
+  --brand-200-rgb: 191, 219, 254;
+  --brand-300-rgb: 147, 197, 253;
+  --brand-400-rgb: 96, 165, 250;
+  --brand-500-rgb: 59, 130, 246;
+  --brand-600-rgb: 37, 99, 235;
+  --brand-700-rgb: 29, 78, 216;
+  --brand-800-rgb: 30, 64, 175;
+  --brand-900-rgb: 30, 58, 138;
+  --brand-950-rgb: 23, 37, 84;
+  --primary: var(--brand-600);
+  --primary-hover: var(--brand-700);
+  --success: #16a34a;
+  --warning: #d97706;
+  --danger: #dc2626;
+  --yape: #720e9e;
+  --plin: #00bed7;
+}
+
+[data-accent="esmeralda"] {
+  --brand-50: #ecfdf5;
+  --brand-100: #d1fae5;
+  --brand-200: #a7f3d0;
+  --brand-300: #6ee7b7;
+  --brand-400: #34d399;
+  --brand-500: #10b981;
+  --brand-600: #059669;
+  --brand-700: #047857;
+  --brand-800: #065f46;
+  --brand-900: #064e3b;
+  --brand-950: #022c22;
+  --brand-50-rgb: 236, 253, 245;
+  --brand-100-rgb: 209, 250, 229;
+  --brand-200-rgb: 167, 243, 208;
+  --brand-300-rgb: 110, 231, 183;
+  --brand-400-rgb: 52, 211, 153;
+  --brand-500-rgb: 16, 185, 129;
+  --brand-600-rgb: 5, 150, 105;
+  --brand-700-rgb: 4, 120, 87;
+  --brand-800-rgb: 6, 95, 70;
+  --brand-900-rgb: 6, 78, 59;
+  --brand-950-rgb: 2, 44, 34;
+  --primary: var(--brand-600);
+  --primary-hover: var(--brand-700);
+}
+
+[data-accent="naranja"] {
+  --brand-50: #fff7ed;
+  --brand-100: #ffedd5;
+  --brand-200: #fed7aa;
+  --brand-300: #fdba74;
+  --brand-400: #fb923c;
+  --brand-500: #f97316;
+  --brand-600: #ea580c;
+  --brand-700: #c2410c;
+  --brand-800: #9a3412;
+  --brand-900: #7c2d12;
+  --brand-950: #431407;
+  --brand-50-rgb: 255, 247, 237;
+  --brand-100-rgb: 255, 237, 213;
+  --brand-200-rgb: 254, 215, 170;
+  --brand-300-rgb: 253, 186, 116;
+  --brand-400-rgb: 251, 146, 60;
+  --brand-500-rgb: 249, 115, 22;
+  --brand-600-rgb: 234, 88, 12;
+  --brand-700-rgb: 194, 65, 12;
+  --brand-800-rgb: 154, 52, 18;
+  --brand-900-rgb: 124, 45, 18;
+  --brand-950-rgb: 67, 20, 7;
+  --primary: var(--brand-600);
+  --primary-hover: var(--brand-700);
+}
+
+[data-accent="violeta"] {
+  --brand-50: #f5f3ff;
+  --brand-100: #ede9fe;
+  --brand-200: #ddd6fe;
+  --brand-300: #c4b5fd;
+  --brand-400: #a78bfa;
+  --brand-500: #8b5cf6;
+  --brand-600: #7c3aed;
+  --brand-700: #6d28d9;
+  --brand-800: #5b21b6;
+  --brand-900: #4c1d95;
+  --brand-950: #2e1065;
+  --brand-50-rgb: 245, 243, 255;
+  --brand-100-rgb: 237, 233, 254;
+  --brand-200-rgb: 221, 214, 254;
+  --brand-300-rgb: 196, 181, 253;
+  --brand-400-rgb: 167, 139, 250;
+  --brand-500-rgb: 139, 92, 246;
+  --brand-600-rgb: 124, 58, 237;
+  --brand-700-rgb: 109, 40, 217;
+  --brand-800-rgb: 91, 33, 182;
+  --brand-900-rgb: 76, 29, 149;
+  --brand-950-rgb: 46, 16, 101;
+  --primary: var(--brand-600);
+  --primary-hover: var(--brand-700);
+}
+
+/* --------------------------------------------------------------------------
+   Remapeo de utilidades Tailwind blue-* → variables de acento
+   Así la UI existente cambia de paleta sin reescribir cada clase.
+   -------------------------------------------------------------------------- */
+.bg-blue-50 { background-color: var(--brand-50) !important; }
+.bg-blue-100 { background-color: var(--brand-100) !important; }
+.bg-blue-600 { background-color: var(--brand-600) !important; }
+.bg-blue-700 { background-color: var(--brand-700) !important; }
+.bg-blue-50\/70 { background-color: rgba(var(--brand-50-rgb), 0.7) !important; }
+
+.text-blue-300 { color: var(--brand-300) !important; }
+.text-blue-400 { color: var(--brand-400) !important; }
+.text-blue-600 { color: var(--brand-600) !important; }
+.text-blue-700 { color: var(--brand-700) !important; }
+.text-blue-800 { color: var(--brand-800) !important; }
+
+.border-blue-200 { border-color: var(--brand-200) !important; }
+.border-blue-300 { border-color: var(--brand-300) !important; }
+.border-blue-500 { border-color: var(--brand-500) !important; }
+.border-blue-700 { border-color: var(--brand-700) !important; }
+
+.ring-blue-500 { --tw-ring-color: var(--brand-500) !important; }
+
+.hover\:bg-blue-50:hover { background-color: var(--brand-50) !important; }
+.hover\:bg-blue-100:hover { background-color: var(--brand-100) !important; }
+.hover\:bg-blue-700:hover { background-color: var(--brand-700) !important; }
+.hover\:text-blue-600:hover { color: var(--brand-600) !important; }
+.hover\:text-blue-700:hover { color: var(--brand-700) !important; }
+.hover\:border-blue-400:hover { border-color: var(--brand-400) !important; }
+.hover\:border-blue-500:hover { border-color: var(--brand-500) !important; }
+
+.focus\:ring-blue-500:focus { --tw-ring-color: var(--brand-500) !important; }
+
+.shadow-blue-500\/20 { --tw-shadow-color: rgba(var(--brand-500-rgb), 0.2) !important; box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), 0 4px 6px -1px rgba(var(--brand-500-rgb), 0.2), 0 2px 4px -2px rgba(var(--brand-500-rgb), 0.2) !important; }
+.shadow-blue-500\/25 { --tw-shadow-color: rgba(var(--brand-500-rgb), 0.25) !important; box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), 0 10px 15px -3px rgba(var(--brand-500-rgb), 0.25), 0 4px 6px -4px rgba(var(--brand-500-rgb), 0.25) !important; }
+.shadow-md.shadow-blue-500\/20 { box-shadow: 0 4px 6px -1px rgba(var(--brand-500-rgb), 0.2), 0 2px 4px -2px rgba(var(--brand-500-rgb), 0.2) !important; }
+.shadow-lg.shadow-blue-500\/25 { box-shadow: 0 10px 15px -3px rgba(var(--brand-500-rgb), 0.25), 0 4px 6px -4px rgba(var(--brand-500-rgb), 0.25) !important; }
+
+.dark .dark\:bg-blue-950 { background-color: var(--brand-950) !important; }
+.dark .dark\:bg-blue-950\/30 { background-color: rgba(var(--brand-950-rgb), 0.3) !important; }
+.dark .dark\:bg-blue-950\/40 { background-color: rgba(var(--brand-950-rgb), 0.4) !important; }
+.dark .dark\:bg-blue-950\/60 { background-color: rgba(var(--brand-950-rgb), 0.6) !important; }
+.dark .dark\:text-blue-300 { color: var(--brand-300) !important; }
+.dark .dark\:text-blue-400 { color: var(--brand-400) !important; }
+.dark .dark\:border-blue-700 { border-color: var(--brand-700) !important; }
+.dark .dark\:border-blue-900\/50 { border-color: rgba(var(--brand-900-rgb), 0.5) !important; }
+.dark .dark\:border-blue-900\/60 { border-color: rgba(var(--brand-900-rgb), 0.6) !important; }
+.dark .dark\:hover\:border-blue-500:hover { border-color: var(--brand-500) !important; }
+
+/* Tipografía fluida y scroll suave */
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+input, textarea, select {
+  user-select: text;
+}
+
+/* Transiciones suaves de modo oscuro y acento */
+* {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease, box-shadow 0.2s ease;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(107, 114, 128, 0.7);
+}
+
+/* Pulso sutil para alertas de stock bajo y crítico */
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.75; transform: scale(1.02); }
+}
+
+.stock-badge-critico {
+  animation: pulse-red 2s infinite ease-in-out;
+}
+
+.stock-badge-bajo {
+  animation: pulse-amber 2.5s infinite ease-in-out;
+}
+
+/* Colores de marca Yape y Plin */
+.bg-yape {
+  background-color: #720e9e;
+}
+.bg-yape:hover {
+  background-color: #5d0b82;
+}
+.text-yape {
+  color: #720e9e;
+}
+.border-yape {
+  border-color: #720e9e;
+}
+
+.bg-plin {
+  background-color: #00bed7;
+}
+.bg-plin:hover {
+  background-color: #009eb3;
+}
+.text-plin {
+  color: #00bed7;
+}
+.border-plin {
+  border-color: #00bed7;
+}
+
+/* Selector de temas / acentos */
+.accent-swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.accent-swatch:hover {
+  transform: scale(1.08);
+}
+.accent-swatch.is-active {
+  border-color: var(--brand-600);
+  box-shadow: 0 0 0 3px rgba(var(--brand-500-rgb), 0.28), inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+.accent-swatch[data-accent-option="azul"] { background: #2563eb; }
+.accent-swatch[data-accent-option="esmeralda"] { background: #059669; }
+.accent-swatch[data-accent-option="naranja"] { background: #ea580c; }
+.accent-swatch[data-accent-option="violeta"] { background: #7c3aed; }
+
+#panel-temas {
+  animation: slideInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Estilo para Ticket de Venta térmico (Impresión 58mm / 80mm) */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #ticket-imprimible, #ticket-imprimible * {
+    visibility: visible;
+  }
+  #ticket-imprimible {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80mm;
+    margin: 0;
+    padding: 10px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 12px;
+    color: #000;
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Toasts de notificación flotantes */
+#toast-container {
+  pointer-events: none;
+}
+.toast-msg {
+  pointer-events: auto;
+  animation: slideInDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideInDown {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* Botones con sensación táctil háptica visual */
+.btn-touch {
+  active:scale-95 transition-transform;
+}
+
+/* Visor QR y Escáner de Cámara (HTML5-QRCode) */
+#qr-reader {
+  width: 100% !important;
+  border: none !important;
+}
+
+#qr-reader video {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  border-radius: 1rem;
+}
+
+#qr-reader__scan_region {
+  border: none !important;
+}
+
+#qr-reader__dashboard {
+  padding: 0.25rem !important;
+}

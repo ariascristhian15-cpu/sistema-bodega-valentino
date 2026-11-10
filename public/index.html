@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Bodega Valentino - Sistema Integral de Gestión POS</title>
+
+  <!-- Aplicar tema (claro/oscuro) y acento antes del render para evitar parpadeo -->
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem('bodega_theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (theme === 'dark' || (!theme && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+        var accent = localStorage.getItem('bodega_accent') || 'azul';
+        document.documentElement.setAttribute('data-accent', accent);
+      } catch (e) {}
+    })();
+  </script>
+  
+  <!-- Favicon y Estilos -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: 'var(--brand-50)',
+              100: 'var(--brand-100)',
+              200: 'var(--brand-200)',
+              300: 'var(--brand-300)',
+              400: 'var(--brand-400)',
+              500: 'var(--brand-500)',
+              600: 'var(--brand-600)',
+              700: 'var(--brand-700)',
+              800: 'var(--brand-800)',
+              900: 'var(--brand-900)',
+              950: 'var(--brand-950)',
+            },
+            yape: '#720e9e',
+            plin: '#00bed7'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- SheetJS (Excel y CSV Parser / Exporter) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+  <!-- HTML5 QR Code Scanner para Cámara en Mostrador -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body class="h-full bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-slate-100 flex flex-col antialiased transition-colors duration-200">
+
+  <!-- ============================================================================== -->
+  <!-- BARRA DE NAVEGACIÓN SUPERIOR / HEADER                                          -->
+  <!-- ============================================================================== -->
+  <header class="h-16 bg-white dark:bg-slate-800/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-700/60 sticky top-0 z-30 px-4 md:px-6 flex items-center justify-between flex-shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-lg shadow-md shadow-blue-500/20">
+        <i data-lucide="store" class="w-5 h-5"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-extrabold tracking-tight text-slate-900 dark:text-white leading-none">
+          Bodega Valentino
+        </h1>
+        <span class="text-[11px] font-semibold text-slate-400">Sistema Central POS</span>
+      </div>
+    </div>
+
+    <!-- Indicadores de Estado y Herramientas -->
+    <div class="flex items-center gap-2 md:gap-3">
+      <!-- Estado de Supabase -->
+      <button id="header-db-status" onclick="document.getElementById('modal-config-supabase').classList.remove('hidden')" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 flex items-center gap-1.5 transition hover:opacity-80" title="Configurar Supabase">
+        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+        <span class="hidden sm:inline">Supabase</span>
+      </button>
+
+      <!-- Estado de Caja -->
+      <div id="header-caja-status" data-tab-target="caja" class="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300 flex items-center gap-1.5 cursor-pointer">
+        <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+        <span>Ver Caja</span>
+      </div>
+
+      <!-- Selector de colores / temas de acento -->
+      <div class="relative">
+        <button id="btn-panel-temas" type="button" class="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Colores de la interfaz" aria-expanded="false" aria-controls="panel-temas">
+          <i data-lucide="palette" class="w-5 h-5"></i>
+        </button>
+        <div id="panel-temas" class="hidden absolute right-0 top-full mt-2 w-64 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-xl z-50">
+          <p class="text-xs font-bold text-slate-700 dark:text-slate-200 mb-2">Color de acento</p>
+          <div class="flex items-center justify-between gap-2 mb-3">
+            <button type="button" class="accent-swatch" data-accent-option="esmeralda" title="Esmeralda / Verde Bodega" aria-label="Esmeralda"></button>
+            <button type="button" class="accent-swatch" data-accent-option="azul" title="Azul Profesional" aria-label="Azul"></button>
+            <button type="button" class="accent-swatch" data-accent-option="naranja" title="Naranja Cálido" aria-label="Naranja"></button>
+            <button type="button" class="accent-swatch" data-accent-option="violeta" title="Violeta Moderno" aria-label="Violeta"></button>
+          </div>
+          <p id="label-acento-activo" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Azul Profesional</p>
+          <div class="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700 flex items-center justify-between gap-2">
+            <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Modo</span>
+            <button id="btn-toggle-tema-panel" type="button" class="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 transition">
+              Claro / Oscuro
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toggle Modo Oscuro -->
+      <button id="btn-toggle-tema" class="p-2 rounded-xl text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition" title="Cambiar Tema">
+        <i data-lucide="moon" class="w-5 h-5 block dark:hidden"></i>
+        <i data-lucide="sun" class="w-5 h-5 hidden dark:block"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============================================================================== -->
+  <!-- CONTENEDOR PRINCIPAL: SIDEBAR (DESKTOP) + VISTAS (TAB-VIEWS)                  -->
+  <!-- ============================================================================== -->
+  <div class="flex-1 flex overflow-hidden">
+    
+    <!-- SIDEBAR LATERAL (Visible en Pantallas Medianas y Grandes) -->
+    <aside class="hidden md:flex flex-col w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700/60 p-4 justify-between flex-shrink-0">
+      <nav class="space-y-1.5">
+        <button data-tab-target="pos" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm bg-blue-600 text-white shadow-sm transition">
+          <i data-lucide="calculator" class="w-5 h-5"></i>
+          <span>Punto de Venta (POS)</span>
+        </button>
+
+        <button data-tab-target="digitales" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition">
+          <div class="flex items-center gap-3">
+            <i data-lucide="smartphone-nfc" class="w-5 h-5 text-purple-500"></i>
+            <span>Pagos Yape/Plin</span>
+          </div>
+          <span class="px-2 py-0.5 text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-950 dark:text-purple-300 rounded-md font-black">HOY</span>
+        </button>
+
+        <button data-tab-target="caja" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+          <span>Apertura y Cierre</span>
+        </button>
+
+        <button data-tab-target="productos" class="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition">
+          <div class="flex items-center gap-3">
+            <i data-lucide="package" class="w-5 h-5"></i>
+            <span>Catálogo y Stock</span>
+          </div>
+          <span id="badge-alertas-stock" class="hidden px-2 py-0.5 text-xs bg-amber-500 text-white rounded-full font-bold">0</span>
+        </button>
+
+        <button data-tab-target="fiados" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+          <span>Libreta de Fiados</span>
+        </button>
+
+        <button data-tab-target="pedidos" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition">
+          <i data-lucide="truck" class="w-5 h-5"></i>
+          <span>Pedidos Proveedores</span>
+        </button>
+
+        <button data-tab-target="reportes" class="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl font-bold text-sm text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition">
+          <i data-lucide="bar-chart-3" class="w-5 h-5"></i>
+          <span>Reportes y Métricas</span>
+        </button>
+      </nav>
+
+      <!-- Pie del Sidebar -->
+      <div class="p-3 bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-slate-100 dark:border-slate-700/60 text-xs">
+        <p class="font-bold text-slate-800 dark:text-slate-200">Atajos Rápidos:</p>
+        <p class="text-slate-400 mt-0.5"><kbd class="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">F2</kbd> Cobrar venta</p>
+        <p class="text-slate-400 mt-0.5"><kbd class="font-mono bg-slate-200 dark:bg-slate-800 px-1 rounded">Enter</kbd> Escanear código</p>
+      </div>
+    </aside>
+
+    <!-- ÁREA DE CONTENIDO PRINCIPAL -->
+    <main class="flex-1 overflow-y-auto pb-20 md:pb-6 p-3 md:p-6">
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 1: PUNTO DE VENTA (POS)                                                  -->
+      <!-- ============================================================================== -->
+      <section id="view-pos" class="tab-view h-full flex flex-col lg:flex-row gap-4">
+        
+        <!-- Panel Izquierdo: Catálogo y Búsqueda -->
+        <div class="flex-1 flex flex-col min-h-0 bg-transparent">
+          
+          <!-- Barra de Búsqueda y Filtros de Categoría -->
+          <div class="space-y-3 mb-4">
+            <div class="flex items-center gap-2">
+              <div class="relative flex-1">
+                <i data-lucide="search" class="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                <input 
+                  id="pos-buscar-input" 
+                  type="text" 
+                  placeholder="Buscar por nombre o escanear código de barras..." 
+                  class="w-full pl-11 pr-4 py-3 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700/60 focus:ring-2 focus:ring-blue-500 font-medium text-sm shadow-xs outline-none"
+                >
+              </div>
+              <button 
+                id="btn-abrir-camara" 
+                type="button"
+                class="px-4 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-500/20 transition active:scale-95 whitespace-nowrap"
+                title="Escanear con Cámara del Dispositivo"
+              >
+                <i data-lucide="camera" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">Cámara</span>
+              </button>
+            </div>
+
+            <!-- Botones de Categorías Rápida -->
+            <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+              <button data-categoria="todos" class="btn-pos-cat px-3 py-1.5 rounded-xl font-bold bg-blue-600 text-white whitespace-nowrap shadow-xs">
+                Todos
+              </button>
+              <button data-categoria="Bebidas" class="btn-pos-cat px-3 py-1.5 rounded-xl font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 whitespace-nowrap">
+                🥤 Bebidas
+              </button>
+              <button data-categoria="Abarrotes" class="btn-pos-cat px-3 py-1.5 rounded-xl font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 whitespace-nowrap">
+                🌾 Abarrotes
+              </button>
+              <button data-categoria="Lácteos" class="btn-pos-cat px-3 py-1.5 rounded-xl font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 whitespace-nowrap">
+                🥛 Lácteos
+              </button>
+              <button data-categoria="Panadería" class="btn-pos-cat px-3 py-1.5 rounded-xl font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 whitespace-nowrap">
+                🥖 Panadería
+              </button>
+              <button data-categoria="Golosinas" class="btn-pos-cat px-3 py-1.5 rounded-xl font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 whitespace-nowrap">
+                🍫 Golosinas
+              </button>
+              <button data-categoria="Limpieza" class="btn-pos-cat px-3 py-1.5 rounded-xl font-semibold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 whitespace-nowrap">
+                🧼 Limpieza
+              </button>
+            </div>
+          </div>
+
+          <!-- Cuadrícula de Productos para Mostrador -->
+          <div class="flex-1 overflow-y-auto pr-1">
+            <div id="pos-grid-productos" class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+              <!-- Renderizado dinámico vía pos.js -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Panel Derecho: Carrito de Compras del Mostrador -->
+        <div class="w-full lg:w-96 flex flex-col bg-white dark:bg-slate-800 rounded-3xl border border-slate-200 dark:border-slate-700/60 shadow-sm overflow-hidden flex-shrink-0">
+          
+          <!-- Encabezado del Carrito -->
+          <div class="p-4 border-b border-slate-100 dark:border-slate-700/60 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <i data-lucide="shopping-cart" class="w-5 h-5 text-blue-600"></i>
+              <h3 class="font-extrabold text-base">Carrito Actual</h3>
+              <span id="pos-cart-badge" class="px-2 py-0.5 rounded-full text-xs font-black bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">0</span>
+            </div>
+            <button id="btn-vaciar-carrito" class="text-xs text-rose-500 hover:text-rose-700 font-semibold transition">
+              Vaciar
+            </button>
+          </div>
+
+          <!-- Lista de Items en Carrito -->
+          <div id="pos-carrito-items" class="flex-1 overflow-y-auto p-4 space-y-2.5 max-h-80 lg:max-h-none">
+            <!-- Se llena con pos.js -->
+          </div>
+
+          <!-- Resumen y Botón de Cobro -->
+          <div class="p-4 bg-slate-50 dark:bg-slate-900/60 border-t border-slate-200 dark:border-slate-700/60 space-y-3">
+            <div class="flex justify-between items-center text-xs text-slate-500 dark:text-slate-400">
+              <span>Subtotal</span>
+              <span id="pos-subtotal" class="font-bold">S/ 0.00</span>
+            </div>
+
+            <div class="flex justify-between items-baseline pt-1">
+              <span class="text-sm font-extrabold text-slate-900 dark:text-white">TOTAL A COBRAR</span>
+              <span id="pos-total" class="text-3xl font-black text-blue-600 dark:text-blue-400">S/ 0.00</span>
+            </div>
+
+            <div class="grid grid-cols-3 gap-2">
+              <button 
+                id="btn-fiar-venta" 
+                type="button"
+                disabled
+                class="col-span-1 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-sm flex flex-col sm:flex-row items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Fiar venta a cliente de la libreta"
+              >
+                <i data-lucide="book-open" class="w-4 h-4"></i>
+                <span>Fiar</span>
+              </button>
+
+              <button 
+                id="btn-abrir-pago" 
+                disabled
+                class="col-span-2 py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-blue-500/25 transition active:scale-98 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <i data-lucide="banknote" class="w-5 h-5"></i>
+                <span>Cobrar (F2)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 2: APERTURA Y CIERRE DE CAJA                                             -->
+      <!-- ============================================================================== -->
+      <section id="view-caja" class="tab-view hidden space-y-6">
+        
+        <!-- Banner cuando NO hay caja abierta -->
+        <div id="banner-sin-caja" class="p-8 rounded-3xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-center space-y-4">
+          <div class="w-16 h-16 rounded-2xl bg-amber-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-amber-500/20">
+            <i data-lucide="lock" class="w-8 h-8"></i>
+          </div>
+          <div>
+            <h3 class="text-xl font-black text-amber-900 dark:text-amber-200">No hay turno de caja abierto</h3>
+            <p class="text-sm text-amber-700 dark:text-amber-400 mt-1 max-w-md mx-auto">
+              Para empezar a registrar ventas en mostrador y llevar el control de efectivo y Yape/Plin, ingresa el sencillo o fondo inicial del día.
+            </p>
+          </div>
+          <button class="btn-abrir-caja-modal px-6 py-3 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition inline-flex items-center gap-2">
+            <i data-lucide="key" class="w-4 h-4"></i>
+            <span>Abrir Caja de Turno</span>
+          </button>
+        </div>
+
+        <!-- Panel con Caja Abierta en curso -->
+        <div id="panel-caja-abierta" class="space-y-6 hidden">
+          
+          <!-- Encabezado con estado y botones de acción -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Turno de Caja Activo</h2>
+              </div>
+              <p id="caja-fecha-apertura" class="text-xs text-slate-400 mt-0.5">Inició: Hoy</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button id="btn-compra-proveedor-caja" class="px-3.5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm shadow-amber-500/20 active:scale-95">
+                <i data-lucide="truck" class="w-4 h-4"></i>
+                <span>Registrar Gasto a Proveedor</span>
+              </button>
+              <button id="btn-nuevo-gasto-caja" class="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-bold transition flex items-center gap-1.5 border border-slate-200 dark:border-slate-700 active:scale-95">
+                <i data-lucide="minus-circle" class="w-4 h-4 text-rose-500"></i>
+                <span>Gasto Caja Chica</span>
+              </button>
+              <button id="btn-cerrar-caja" class="px-3.5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-rose-500/20 active:scale-95">
+                <i data-lucide="check-square" class="w-4 h-4"></i>
+                <span>Cerrar Caja (Corte)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Métricas Clave de la Caja -->
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+            
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+              <span class="text-xs text-slate-400 font-medium">Fondo Inicial</span>
+              <p id="caja-fondo-inicial" class="text-lg font-black text-slate-800 dark:text-slate-100 mt-1">S/ 0.00</p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+              <span class="text-xs text-emerald-600 font-semibold">Ventas Efectivo</span>
+              <p id="caja-ventas-efectivo" class="text-lg font-black text-emerald-600 mt-1">S/ 0.00</p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+              <span class="text-xs text-purple-600 font-semibold">Yape / Plin</span>
+              <p id="caja-ventas-digital" class="text-lg font-black text-purple-600 mt-1">S/ 0.00</p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+              <span class="text-xs text-rose-500 font-semibold">Gastos Menores</span>
+              <p id="caja-total-gastos" class="text-lg font-black text-rose-500 mt-1">S/ 0.00</p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 shadow-xs">
+              <span class="text-xs text-blue-700 dark:text-blue-300 font-bold">Efectivo en Caja</span>
+              <p id="caja-saldo-efectivo-teorico" class="text-xl font-black text-blue-700 dark:text-blue-300 mt-1">S/ 0.00</p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-slate-900 text-white dark:bg-slate-700 shadow-xs">
+              <span class="text-xs text-slate-300 font-medium">Total Facturado</span>
+              <p id="caja-total-turno" class="text-xl font-black text-emerald-400 mt-1">S/ 0.00</p>
+            </div>
+
+          </div>
+
+          <!-- Historial de Salidas / Gastos de Caja Chica -->
+          <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-200 dark:border-slate-700/60 shadow-sm">
+            <h3 class="text-base font-extrabold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+              <i data-lucide="receipt" class="w-5 h-5 text-slate-400"></i>
+              <span>Salidas y Gastos de Caja Chica del Turno</span>
+            </h3>
+            <div id="lista-gastos-caja" class="space-y-2">
+              <!-- Renderizado dinámico -->
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 3: CATÁLOGO DE PRODUCTOS Y STOCK                                         -->
+      <!-- ============================================================================== -->
+      <section id="view-productos" class="tab-view hidden space-y-4">
+        
+        <!-- Barra de herramientas: Búsqueda, Alertas y Botón Nuevo -->
+        <div class="flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+          <div class="flex-1 relative">
+            <i data-lucide="search" class="w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"></i>
+            <input 
+              id="buscar-producto-input" 
+              type="text" 
+              placeholder="Filtrar por nombre, categoría o código..." 
+              class="w-full pl-11 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 font-medium text-sm outline-none"
+            >
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300">
+              <input id="toggle-stock-bajo" type="checkbox" class="rounded text-blue-600 w-4 h-4">
+              <span>Solo Stock Bajo</span>
+            </label>
+
+            <button id="btn-abrir-importar" class="px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-emerald-500/20 whitespace-nowrap active:scale-95">
+              <i data-lucide="file-spreadsheet" class="w-4 h-4"></i>
+              <span>Importar Catálogo (Excel/CSV)</span>
+            </button>
+
+            <button id="btn-nuevo-producto" class="px-3.5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-500/20 whitespace-nowrap active:scale-95">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Nuevo Producto</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filtros de categoría -->
+        <div class="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <button data-categoria="todos" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-bold bg-blue-600 text-white">Todos</button>
+          <button data-categoria="Bebidas" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Bebidas</button>
+          <button data-categoria="Abarrotes" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Abarrotes</button>
+          <button data-categoria="Lácteos" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Lácteos</button>
+          <button data-categoria="Panadería" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Panadería</button>
+          <button data-categoria="Golosinas" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Golosinas</button>
+          <button data-categoria="Limpieza" class="btn-cat-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Limpieza</button>
+        </div>
+
+        <!-- Catálogo Grid -->
+        <div id="grid-productos" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <!-- Renderizado dinámico vía productos.js -->
+        </div>
+
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 4: LIBRETA DE FIADOS (CUENTAS POR COBRAR)                                -->
+      <!-- ============================================================================== -->
+      <section id="view-fiados" class="tab-view hidden space-y-4">
+        
+        <!-- Cabecera y Resumen de Deudas -->
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div class="flex items-center gap-4">
+            <div class="p-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60">
+              <span class="text-xs text-rose-600 font-bold">Total por Cobrar:</span>
+              <p id="fiados-total-por-cobrar" class="text-2xl font-black text-rose-600 dark:text-rose-400">S/ 0.00</p>
+            </div>
+            <div class="text-xs text-slate-400">
+              <span id="fiados-clientes-deuda-count" class="font-bold text-slate-700 dark:text-slate-200">0 clientes</span> con saldo pendiente
+            </div>
+          </div>
+
+          <button id="btn-nuevo-cliente-fiado" class="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-md shadow-blue-500/20">
+            <i data-lucide="user-plus" class="w-4 h-4"></i>
+            <span>Nuevo Cliente Fiador</span>
+          </button>
+        </div>
+
+        <!-- Lista de Clientes Fiadores -->
+        <div id="lista-clientes-fiados" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <!-- Renderizado dinámico vía fiados.js -->
+        </div>
+
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 5: GESTIÓN DE PEDIDOS Y PROVEEDORES                                      -->
+      <!-- ============================================================================== -->
+      <section id="view-pedidos" class="tab-view hidden space-y-4">
+        
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-900 dark:text-white">Lista de Reabastecimiento</h2>
+            <p class="text-xs text-slate-400">Apunta productos faltantes para pedir a los distribuidores sin papelitos sueltos.</p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button id="btn-sugerir-pedidos" class="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span>Sugerir por Stock Bajo</span>
+            </button>
+            <button id="btn-nuevo-pedido" class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Nuevo Pedido</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Filtros de estado -->
+        <div class="flex items-center gap-2 text-xs">
+          <button data-estado="todos" class="btn-pedidos-filtro px-3 py-1.5 rounded-xl font-bold bg-blue-600 text-white">Todos</button>
+          <button data-estado="pendiente" class="btn-pedidos-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Pendientes</button>
+          <button data-estado="pedido" class="btn-pedidos-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Pedidos al Proveedor</button>
+          <button data-estado="recibido" class="btn-pedidos-filtro px-3 py-1.5 rounded-xl font-medium bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">Recibidos</button>
+        </div>
+
+        <!-- Grid de Pedidos -->
+        <div id="lista-pedidos-proveedor" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Renderizado dinámico vía pedidos.js -->
+        </div>
+
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 6: APARTADO DE PAGOS DIGITALES (YAPE / PLIN)                             -->
+      <!-- ============================================================================== -->
+      <section id="view-digitales" class="tab-view hidden space-y-4">
+        
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-gradient-to-r from-purple-900 to-indigo-900 text-white p-6 rounded-3xl shadow-md">
+          <div>
+            <span class="text-xs font-bold uppercase tracking-wider text-purple-300">Auditoría en Mostrador</span>
+            <h2 class="text-2xl font-black mt-0.5">Validación de Yape y Plin</h2>
+            <p class="text-xs text-purple-200 mt-1 max-w-lg">
+              Compara de un vistazo las ventas digitales registradas en el sistema con las notificaciones recibidas en tu celular.
+            </p>
+          </div>
+          <span id="badge-total-digitales" class="px-4 py-2 rounded-2xl bg-white/10 backdrop-blur-md text-white font-black text-sm border border-white/20">
+            Total Yape/Plin Hoy: S/ 0.00
+          </span>
+        </div>
+
+        <!-- Lista de Comprobantes Digitales -->
+        <div id="lista-pagos-digitales" class="space-y-2.5">
+          <!-- Renderizado dinámico vía pos.js -->
+        </div>
+
+      </section>
+
+      <!-- ============================================================================== -->
+      <!-- VISTA 7: REPORTES Y BITÁCORA DEL DÍA                                           -->
+      <!-- ============================================================================== -->
+      <section id="view-reportes" class="tab-view hidden space-y-6">
+        
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-xl font-extrabold text-slate-900 dark:text-white">Resumen Ejecutivo del Día</h2>
+            <p class="text-xs text-slate-400">Cifras operativas consolidadas en tiempo real.</p>
+          </div>
+          <button id="btn-refrescar-reportes" class="p-2 text-slate-500 hover:text-blue-600 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Tarjetas KPI -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+            <span class="text-xs text-slate-400 font-medium">Ventas Totales Hoy</span>
+            <p id="rep-ventas-hoy" class="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1">S/ 0.00</p>
+          </div>
+
+          <div class="p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+            <span class="text-xs text-emerald-600 font-medium">Efectivo Ingresado</span>
+            <p id="rep-ventas-efectivo" class="text-2xl font-black text-emerald-600 mt-1">S/ 0.00</p>
+          </div>
+
+          <div class="p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+            <span class="text-xs text-purple-600 font-medium">Digital (Yape / Plin)</span>
+            <p id="rep-ventas-digital" class="text-2xl font-black text-purple-600 mt-1">S/ 0.00</p>
+          </div>
+
+          <div class="p-4 rounded-3xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700/60 shadow-xs">
+            <span class="text-xs text-rose-500 font-medium">Total por Cobrar (Fiados)</span>
+            <p id="rep-fiados-total" class="text-2xl font-black text-rose-500 mt-1">S/ 0.00</p>
+          </div>
+        </div>
+
+        <!-- Ranking y Alertas -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Top Productos Más Vendidos -->
+          <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-100 dark:border-slate-700/60 shadow-sm">
+            <h3 class="font-extrabold text-base mb-4 flex items-center gap-2">
+              <i data-lucide="trending-up" class="w-5 h-5 text-blue-600"></i>
+              <span>Top 5 Productos de Mayor Rotación</span>
+            </h3>
+            <div id="rep-ranking-productos" class="space-y-4">
+              <!-- Renderizado dinámico -->
+            </div>
+          </div>
+
+          <!-- Alertas de Stock Crítico -->
+          <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-100 dark:border-slate-700/60 shadow-sm">
+            <h3 class="font-extrabold text-base mb-4 flex items-center gap-2">
+              <i data-lucide="alert-triangle" class="w-5 h-5 text-amber-500"></i>
+              <span>Productos con Alerta de Reposición</span>
+            </h3>
+            <div id="rep-alertas-criticas" class="space-y-2">
+              <!-- Renderizado dinámico -->
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </main>
+  </div>
+
+  <!-- ============================================================================== -->
+  <!-- BARRA DE NAVEGACIÓN INFERIOR (MÓVIL / TÁCTIL)                                 -->
+  <!-- ============================================================================== -->
+  <nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 flex items-center justify-around px-2 z-30">
+    <button data-tab-target="pos" class="flex flex-col items-center justify-center p-1.5 text-blue-600 font-bold text-[10px]">
+      <i data-lucide="calculator" class="w-5 h-5"></i>
+      <span>POS</span>
+    </button>
+    <button data-tab-target="digitales" class="flex flex-col items-center justify-center p-1.5 text-slate-500 dark:text-slate-400 font-medium text-[10px]">
+      <i data-lucide="smartphone-nfc" class="w-5 h-5"></i>
+      <span>Yape/Plin</span>
+    </button>
+    <button data-tab-target="caja" class="flex flex-col items-center justify-center p-1.5 text-slate-500 dark:text-slate-400 font-medium text-[10px]">
+      <i data-lucide="wallet" class="w-5 h-5"></i>
+      <span>Caja</span>
+    </button>
+    <button data-tab-target="productos" class="flex flex-col items-center justify-center p-1.5 text-slate-500 dark:text-slate-400 font-medium text-[10px]">
+      <i data-lucide="package" class="w-5 h-5"></i>
+      <span>Stock</span>
+    </button>
+    <button data-tab-target="fiados" class="flex flex-col items-center justify-center p-1.5 text-slate-500 dark:text-slate-400 font-medium text-[10px]">
+      <i data-lucide="book-open" class="w-5 h-5"></i>
+      <span>Fiados</span>
+    </button>
+    <button data-tab-target="pedidos" class="flex flex-col items-center justify-center p-1.5 text-slate-500 dark:text-slate-400 font-medium text-[10px]">
+      <i data-lucide="truck" class="w-5 h-5"></i>
+      <span>Pedidos</span>
+    </button>
+  </nav>
+
+  <!-- ============================================================================== -->
+  <!-- MODALES DE OPERACIÓN                                                           -->
+  <!-- ============================================================================== -->
+
+  <!-- 1. Modal Cobro POS -->
+  <div id="modal-cobro" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <div class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-lg">Cobrar Venta</h3>
+        <button class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="text-center p-3 bg-blue-50 dark:bg-blue-950/40 rounded-2xl border border-blue-200 dark:border-blue-900/50">
+        <span class="text-xs text-blue-700 dark:text-blue-300 font-semibold">Total a Pagar</span>
+        <p id="pago-monto-total" class="text-3xl font-black text-blue-600 dark:text-blue-400">S/ 0.00</p>
+      </div>
+
+      <!-- Selección de Método de Pago -->
+      <div class="grid grid-cols-5 gap-1.5">
+        <button type="button" data-metodo="efectivo" class="btn-metodo-pago p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 text-[11px] font-bold ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-950">
+          <i data-lucide="banknote" class="w-4 h-4 text-emerald-600"></i>
+          <span>Efectivo</span>
+        </button>
+        <button type="button" data-metodo="yape" class="btn-metodo-pago p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 text-[11px] font-bold text-yape">
+          <i data-lucide="smartphone" class="w-4 h-4"></i>
+          <span>Yape</span>
+        </button>
+        <button type="button" data-metodo="plin" class="btn-metodo-pago p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 text-[11px] font-bold text-plin">
+          <i data-lucide="smartphone" class="w-4 h-4"></i>
+          <span>Plin</span>
+        </button>
+        <button type="button" data-metodo="mixto" class="btn-metodo-pago p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 text-[11px] font-bold text-slate-600">
+          <i data-lucide="split" class="w-4 h-4"></i>
+          <span>Mixto</span>
+        </button>
+        <button type="button" data-metodo="fiado" class="btn-metodo-pago p-2 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center gap-1 text-[11px] font-bold text-amber-600">
+          <i data-lucide="book-open" class="w-4 h-4"></i>
+          <span>Fiado</span>
+        </button>
+      </div>
+
+      <!-- Sección Efectivo -->
+      <div id="pago-seccion-efectivo" class="space-y-3">
+        <div>
+          <label class="text-xs font-bold text-slate-500">Monto Recibido</label>
+          <div class="relative mt-1">
+            <span class="absolute left-3.5 top-1/2 -translate-y-1/2 font-bold text-slate-400">S/</span>
+            <input id="pago-monto-recibido" type="number" step="0.10" class="w-full pl-9 pr-4 py-3 text-xl font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-blue-500 outline-none">
+          </div>
+        </div>
+
+        <!-- Billetes Rápidos -->
+        <div class="grid grid-cols-5 gap-1.5 text-xs font-black">
+          <button type="button" data-monto="exacto" class="btn-billete py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">Exacto</button>
+          <button type="button" data-monto="10" class="btn-billete py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">S/ 10</button>
+          <button type="button" data-monto="20" class="btn-billete py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">S/ 20</button>
+          <button type="button" data-monto="50" class="btn-billete py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">S/ 50</button>
+          <button type="button" data-monto="100" class="btn-billete py-2 rounded-lg bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200">S/ 100</button>
+        </div>
+
+        <!-- Vuelto Calculado -->
+        <div id="pago-vuelto-container" class="p-3 rounded-2xl bg-slate-50 dark:bg-slate-900 flex items-center justify-between border border-slate-100 dark:border-slate-700">
+          <span class="text-xs font-bold text-slate-400">Vuelto a Entregar:</span>
+          <span id="pago-vuelto-calculado" class="text-2xl font-black text-emerald-600">S/ 0.00</span>
+        </div>
+      </div>
+
+      <!-- Sección Digital (Yape / Plin) -->
+      <div id="pago-seccion-digital" class="space-y-3 hidden">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold text-slate-500">Datos de la App</span>
+          <span id="digital-badge-tipo" class="px-2 py-0.5 text-xs font-bold rounded-md bg-yape text-white">YAPE</span>
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-400">N° de Operación (Voucher)</label>
+          <input id="pago-num-operacion" type="text" placeholder="Ej: 981245" class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-mono text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-400">Teléfono del Cliente (Opcional)</label>
+          <input id="pago-tel-cliente" type="tel" placeholder="Ej: 987 654 321" class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+        </div>
+      </div>
+
+      <!-- Sección Pago Mixto -->
+      <div id="pago-seccion-mixto" class="space-y-3 hidden">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-bold text-slate-400">Parte en Efectivo</label>
+            <input id="mixto-monto-efectivo" type="number" step="0.10" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-400">Parte Digital (Yape/Plin)</label>
+            <input id="mixto-monto-digital" type="number" step="0.10" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+          </div>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="text-xs font-bold text-slate-400">N° Operación</label>
+            <input id="mixto-num-operacion" type="text" placeholder="Voucher" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+          </div>
+          <div>
+            <label class="text-xs font-bold text-slate-400">Teléfono</label>
+            <input id="mixto-tel-cliente" type="tel" placeholder="Celular" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección Pago Fiado -->
+      <div id="pago-seccion-fiado" class="space-y-3 hidden">
+        <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-900/50 text-xs text-amber-800 dark:text-amber-300">
+          <p class="font-bold flex items-center gap-1.5"><i data-lucide="book-open" class="w-4 h-4"></i> Venta Fiada (Cuenta por Cobrar)</p>
+          <p class="mt-0.5">Descuenta el stock inmediatamente y no ingresa efectivo a caja. Selecciona al cliente para registrar su deuda.</p>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between gap-2">
+            <label class="text-xs font-bold text-slate-500">Seleccionar Cliente Fiador</label>
+            <button type="button" id="btn-pago-nuevo-cliente-fiado" class="text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1">
+              <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+              + Nuevo Cliente
+            </button>
+          </div>
+          <select id="pago-fiado-cliente" class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-semibold text-xs text-slate-800 dark:text-white">
+            <option value="">-- Elige un cliente de la libreta --</option>
+          </select>
+        </div>
+
+        <div id="pago-nuevo-cliente-panel" class="hidden p-3 rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 space-y-2">
+          <div>
+            <label class="text-[11px] font-bold text-slate-500">Nombre</label>
+            <input id="pago-nuevo-fiado-nombre" type="text" placeholder="Nombre del cliente" class="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+          </div>
+          <div>
+            <label class="text-[11px] font-bold text-slate-500">Teléfono</label>
+            <input id="pago-nuevo-fiado-telefono" type="tel" placeholder="987 654 321" class="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+          </div>
+          <div class="flex gap-2">
+            <button type="button" id="btn-cancelar-pago-nuevo-cliente" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition">
+              Cancelar
+            </button>
+            <button type="button" id="btn-guardar-pago-nuevo-cliente" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition">
+              Guardar y seleccionar
+            </button>
+          </div>
+        </div>
+
+        <div id="pago-fiado-cliente-info" class="hidden p-3 rounded-xl bg-slate-100 dark:bg-slate-700/50 text-xs space-y-1">
+          <div class="flex justify-between"><span>Deuda Actual:</span> <strong id="pago-fiado-info-deuda" class="text-rose-500">S/ 0.00</strong></div>
+          <div class="flex justify-between"><span>Límite de Crédito:</span> <span id="pago-fiado-info-limite">S/ 0.00</span></div>
+          <div class="flex justify-between font-bold border-t border-slate-200 dark:border-slate-600 pt-1"><span>Nuevo Saldo Total:</span> <span id="pago-fiado-info-nuevo" class="text-amber-600">S/ 0.00</span></div>
+          <p id="pago-fiado-alerta-limite" class="hidden text-rose-500 font-bold pt-1">⚠️ ¡Esta compra superará el límite de crédito del cliente!</p>
+        </div>
+
+        <div>
+          <label class="text-xs font-bold text-slate-400">Concepto / Glosa del Fiado</label>
+          <input id="pago-fiado-concepto" type="text" placeholder="Resumen de productos fiados" class="w-full mt-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+        </div>
+      </div>
+
+      <!-- Nombre Opcional del Cliente -->
+      <div>
+        <label class="text-xs font-bold text-slate-400">Nombre del Cliente (Opcional)</label>
+        <input id="pago-cliente-nombre" type="text" placeholder="Cliente Mostrador" class="w-full mt-1 px-3.5 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <button id="btn-confirmar-venta" class="w-full py-3.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-base flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/25 transition">
+        <i data-lucide="check-circle" class="w-5 h-5"></i>
+        <span>Confirmar Venta y Descontar Stock</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- 2. Modal Apertura de Caja -->
+  <div id="modal-apertura-caja" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-apertura-caja" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2">
+          <i data-lucide="key" class="w-5 h-5 text-amber-500"></i>
+          <span>Apertura de Caja</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Fondo Inicial / Sencillo en Caja (S/)</label>
+        <input id="input-fondo-inicial" type="number" step="0.50" value="100.00" required class="w-full mt-1 px-4 py-3 text-xl font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-amber-500 outline-none">
+        <p class="text-[11px] text-slate-400 mt-1">Monedas y billetes chicos para dar vuelto.</p>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Observaciones</label>
+        <textarea id="input-apertura-obs" rows="2" placeholder="Ej: Conteo de monedas de S/ 1, S/ 2 y S/ 5" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"></textarea>
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition">
+        Confirmar e Iniciar Turno
+      </button>
+    </form>
+  </div>
+
+  <!-- 3. Modal Gasto de Caja Chica -->
+  <div id="modal-gasto-caja" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-gasto-caja" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2">
+          <i data-lucide="minus-circle" class="w-5 h-5 text-rose-500"></i>
+          <span>Gasto Menor (Caja Chica)</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Monto del Gasto (S/)</label>
+        <input id="input-gasto-monto" type="number" step="0.10" required class="w-full mt-1 px-4 py-2.5 text-lg font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Motivo / Descripción</label>
+        <input id="input-gasto-desc" type="text" placeholder="Ej: Compra de bolsas, pasaje, pan" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md transition">
+        Registrar Salida de Efectivo
+      </button>
+    </form>
+  </div>
+
+  <!-- 4. Modal Cierre de Caja (Corte Diario / Arqueo) -->
+  <div id="modal-cierre-caja" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-cierre-caja" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2">
+          <i data-lucide="check-square" class="w-5 h-5 text-blue-600"></i>
+          <span>Corte Diario y Arqueo de Caja</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Cuadro Comparativo Teórico vs Físico -->
+      <div class="space-y-3 bg-slate-50 dark:bg-slate-900/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700">
+        
+        <!-- Efectivo -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-slate-500 font-bold">Efectivo Teórico en Sistema:</span>
+            <span id="cierre-teorico-efectivo" class="font-bold">S/ 0.00</span>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400">Conteo Físico Real (Billetes + Monedas):</label>
+            <input id="cierre-conteo-efectivo" type="number" step="0.10" placeholder="0.00" required class="w-full mt-0.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-sm">
+          </div>
+          <div class="flex justify-end pt-1">
+            <span id="cierre-resultado-efectivo" class="text-xs font-bold text-slate-400">Pendiente conteo</span>
+          </div>
+        </div>
+
+        <hr class="border-slate-200 dark:border-slate-700">
+
+        <!-- Digital (Yape / Plin) -->
+        <div class="space-y-1">
+          <div class="flex justify-between text-xs">
+            <span class="text-purple-600 font-bold">Saldo Digital Teórico:</span>
+            <span id="cierre-teorico-digital" class="font-bold text-purple-600">S/ 0.00</span>
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400">Total Validado en App Yape/Plin:</label>
+            <input id="cierre-conteo-digital" type="number" step="0.10" class="w-full mt-0.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-bold text-sm">
+          </div>
+          <div class="flex justify-end pt-1">
+            <span id="cierre-resultado-digital" class="text-xs font-bold text-slate-400">Coincide</span>
+          </div>
+        </div>
+
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Observaciones del Cuadre</label>
+        <textarea id="cierre-observaciones" rows="2" placeholder="Notas sobre diferencias o estado general" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"></textarea>
+      </div>
+
+      <button type="submit" class="w-full py-3.5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-md transition">
+        Finalizar Turno y Guardar Corte
+      </button>
+    </form>
+  </div>
+
+  <!-- 5. Modal Ticket Imprimible (Formato Térmico) -->
+  <div id="modal-ticket" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <div class="relative bg-white text-slate-900 rounded-3xl max-w-xs w-full p-6 shadow-2xl border border-slate-200 space-y-4 font-mono text-xs">
+      
+      <div id="ticket-imprimible" class="space-y-2 border-b border-dashed border-slate-300 pb-3">
+        <div class="text-center">
+          <h4 class="font-extrabold text-sm uppercase">Bodega Valentino</h4>
+          <p class="text-[10px] text-slate-500">RUC: 10458920191 - Jr. Los Pinos 302</p>
+          <p class="text-[10px] text-slate-500">TICKET DE VENTA</p>
+        </div>
+
+        <div class="text-[10px] space-y-0.5 pt-1">
+          <div class="flex justify-between"><span>Ticket:</span> <strong id="ticket-codigo">TKB-00000</strong></div>
+          <div class="flex justify-between"><span>Fecha:</span> <span id="ticket-fecha">--/--/--</span></div>
+          <div class="flex justify-between"><span>Cliente:</span> <span id="ticket-cliente">Mostrador</span></div>
+          <div class="flex justify-between"><span>Pago:</span> <strong id="ticket-metodo">EFECTIVO</strong></div>
+          <div id="ticket-operacion" class="text-purple-700 hidden"></div>
+        </div>
+
+        <hr class="border-dashed border-slate-300">
+
+        <div id="ticket-items" class="space-y-1">
+          <!-- Items del ticket -->
+        </div>
+
+        <hr class="border-dashed border-slate-300">
+
+        <div class="space-y-1 pt-1 text-right">
+          <div class="flex justify-between font-bold text-sm"><span>TOTAL:</span> <span id="ticket-total">S/ 0.00</span></div>
+          <div class="flex justify-between text-[10px] text-slate-500"><span>Recibido:</span> <span id="ticket-recibido">S/ 0.00</span></div>
+          <div class="flex justify-between text-[10px] text-slate-500"><span>Vuelto:</span> <span id="ticket-vuelto">S/ 0.00</span></div>
+        </div>
+
+        <p class="text-center text-[10px] text-slate-400 pt-2">¡Gracias por su compra!</p>
+      </div>
+
+      <div class="no-print flex gap-2">
+        <button id="btn-imprimir-ticket" class="flex-1 py-2.5 rounded-xl bg-blue-600 text-white font-bold flex items-center justify-center gap-1.5 shadow-sm">
+          <i data-lucide="printer" class="w-4 h-4"></i> Imprimir
+        </button>
+        <button class="modal-close flex-1 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold">
+          Cerrar
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 6. Modal Crear / Editar Producto -->
+  <div id="modal-producto" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-producto" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 id="modal-producto-titulo" class="font-extrabold text-base">Nuevo Producto</h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input id="prod-id" type="hidden">
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Nombre del Producto</label>
+        <input id="prod-nombre" type="text" placeholder="Ej: Arroz Costeño Extra 1kg" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">URL de Imagen / Foto del Producto</label>
+        <input id="prod-imagen" type="url" placeholder="https://ejemplo.com/foto-producto.jpg (opcional)" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-xs font-bold text-slate-500">Código de Barras</label>
+          <input id="prod-codigo" type="text" placeholder="Opcional" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-500">Categoría</label>
+          <select id="prod-categoria" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+            <option value="Abarrotes">Abarrotes</option>
+            <option value="Bebidas">Bebidas</option>
+            <option value="Lácteos">Lácteos</option>
+            <option value="Panadería">Panadería</option>
+            <option value="Golosinas">Golosinas</option>
+            <option value="Conservas">Conservas</option>
+            <option value="Limpieza">Limpieza</option>
+            <option value="Otros">Otros</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-xs font-bold text-blue-600">Precio Venta (S/)</label>
+          <input id="prod-precio-venta" type="number" step="0.10" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-blue-300 dark:border-blue-700 text-base font-black">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-400">Precio Costo (S/)</label>
+          <input id="prod-precio-costo" type="number" step="0.10" placeholder="0.00" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold">
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="text-xs font-bold text-slate-500">Stock Actual</label>
+          <input id="prod-stock" type="number" step="1" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-amber-500">Stock Mínimo</label>
+          <input id="prod-stock-min" type="number" step="1" value="5" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-500">Unidad</label>
+          <select id="prod-unidad" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+            <option value="unidad">Unidad</option>
+            <option value="kg">Kilo (Kg)</option>
+            <option value="litro">Litro</option>
+            <option value="paquete">Paquete</option>
+          </select>
+        </div>
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm shadow-md transition pt-2">
+        Guardar en Catálogo
+      </button>
+    </form>
+  </div>
+
+  <!-- 7. Modal Nuevo Cliente Fiador -->
+  <div id="modal-nuevo-cliente-fiado" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-nuevo-cliente-fiado" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base">Registrar Cliente Fiador</h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Nombre Completo</label>
+        <input id="fiado-cliente-nombre" type="text" placeholder="Ej: Doña Carmen Ramos" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Teléfono / WhatsApp</label>
+        <input id="fiado-cliente-telefono" type="tel" placeholder="987 654 321" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Dirección o Referencia</label>
+        <input id="fiado-cliente-direccion" type="text" placeholder="Ej: Mz B Lote 14" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Límite de Crédito (S/)</label>
+        <input id="fiado-cliente-limite" type="number" step="10" value="200.00" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition">
+        Guardar Cliente
+      </button>
+    </form>
+  </div>
+
+  <!-- 8. Modal Nuevo Fiado (Fiar a Cliente) -->
+  <div id="modal-nuevo-fiado" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-nuevo-fiado" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base">Fiar a Cliente</h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input id="nuevo-fiado-cliente-id" type="hidden">
+
+      <p class="text-xs text-slate-400">Cliente: <strong id="nuevo-fiado-cliente-nombre" class="text-slate-800 dark:text-white"></strong></p>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Monto del Fiado (S/)</label>
+        <input id="nuevo-fiado-monto" type="number" step="0.10" required class="w-full mt-1 px-3 py-2.5 text-lg font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Concepto / Productos Fiados</label>
+        <textarea id="nuevo-fiado-concepto" rows="2" placeholder="Ej: 2 leches gloria + 1kg arroz + aceite" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"></textarea>
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-sm shadow-md transition">
+        Anotar en Libreta de Fiados
+      </button>
+    </form>
+  </div>
+
+  <!-- 9. Modal Abono a Fiado -->
+  <div id="modal-abono-fiado" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-abono-fiado" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base">Registrar Abono</h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input id="abono-cliente-id" type="hidden">
+
+      <div class="p-3 bg-slate-50 dark:bg-slate-900 rounded-xl flex justify-between items-center text-xs">
+        <div>
+          <span class="text-slate-400">Cliente:</span>
+          <p id="abono-cliente-nombre" class="font-bold text-slate-800 dark:text-white"></p>
+        </div>
+        <div class="text-right">
+          <span class="text-slate-400">Saldo Pendiente:</span>
+          <p id="abono-saldo-pendiente" class="font-black text-rose-600"></p>
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Monto a Abonar (S/)</label>
+        <input id="abono-monto" type="number" step="0.10" required class="w-full mt-1 px-3 py-2.5 text-lg font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Medio de Pago</label>
+        <select id="abono-metodo-pago" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-semibold">
+          <option value="efectivo">Efectivo</option>
+          <option value="yape">Yape</option>
+          <option value="plin">Plin</option>
+        </select>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Notas / N° Operación</label>
+        <input id="abono-notas" type="text" placeholder="Opcional" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition">
+        Procesar Abono
+      </button>
+    </form>
+  </div>
+
+  <!-- 10. Modal Detalle Historial Deudas Cliente -->
+  <div id="modal-detalle-cliente-fiado" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <div class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <div>
+          <h3 id="detalle-cliente-nombre" class="font-extrabold text-base">Cliente</h3>
+          <p class="text-xs text-slate-400">Historial de deudas</p>
+        </div>
+        <div class="text-right">
+          <span class="text-[10px] text-slate-400">Saldo Total:</span>
+          <p id="detalle-cliente-saldo" class="text-base font-black text-rose-600">S/ 0.00</p>
+        </div>
+      </div>
+
+      <div id="detalle-cliente-deudas-lista" class="space-y-2 max-h-72 overflow-y-auto">
+        <!-- Renderizado dinámico -->
+      </div>
+
+      <button class="modal-close w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs">
+        Cerrar
+      </button>
+    </div>
+  </div>
+
+  <!-- 11. Modal Nuevo Pedido a Proveedor -->
+  <div id="modal-nuevo-pedido" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-nuevo-pedido" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base">Nuevo Pedido / Reabastecimiento</h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Producto o Item a Pedir</label>
+        <input id="pedido-item-nombre" type="text" placeholder="Ej: Arroz Costeño (Saco x 50kg)" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-xs font-bold text-slate-500">Cantidad</label>
+          <input id="pedido-item-cantidad" type="number" step="1" value="1" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-bold">
+        </div>
+        <div>
+          <label class="text-xs font-bold text-slate-500">Proveedor</label>
+          <input id="pedido-item-proveedor" type="text" placeholder="Ej: Alicorp" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+        </div>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Notas / Presentación</label>
+        <textarea id="pedido-item-notas" rows="2" placeholder="Ej: Pedir precio mayorista" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"></textarea>
+      </div>
+
+      <button type="submit" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition">
+        Guardar en Lista de Pedidos
+      </button>
+    </form>
+  </div>
+
+  <!-- 12. Modal Configuración Supabase -->
+  <div id="modal-config-supabase" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-config-supabase" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2">
+          <i data-lucide="database" class="w-5 h-5 text-emerald-500"></i>
+          <span>Conexión con Supabase</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200 dark:border-emerald-900/50 text-xs text-emerald-800 dark:text-emerald-300">
+        <p class="font-bold">⚡ PostgreSQL en la nube</p>
+        <p class="mt-0.5">El sistema sincroniza automáticamente las ventas, inventarios, fiados y arqueos de caja con tu proyecto en Supabase.</p>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Supabase Project URL</label>
+        <input id="config-supabase-url" type="url" placeholder="https://xyzcompany.supabase.co" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Supabase Anon Public Key</label>
+        <input id="config-supabase-key" type="password" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..." class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button type="submit" class="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition">
+          Conectar y Probar
+        </button>
+        <button type="button" class="modal-close px-4 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs">
+          Cancelar
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <!-- 13. Modal Fiado Directo desde POS -->
+  <div id="modal-fiar-directo" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-fiar-directo" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
+          <i data-lucide="book-open" class="w-5 h-5"></i>
+          <span>Fiar Venta a Cliente</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-900/50 flex items-center justify-between">
+        <div>
+          <span class="text-xs text-amber-800 dark:text-amber-300 font-semibold">Total a Fiar</span>
+          <p id="fiar-directo-monto-total" class="text-2xl font-black text-amber-600 dark:text-amber-400">S/ 0.00</p>
+        </div>
+        <span class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-amber-200/60 dark:bg-amber-900 text-amber-900 dark:text-amber-200">
+          Stock se descontará
+        </span>
+      </div>
+
+      <div>
+        <div class="flex items-center justify-between gap-2">
+          <label class="text-xs font-bold text-slate-500">Seleccionar Cliente de la Libreta</label>
+          <button type="button" id="btn-fiar-nuevo-cliente" class="text-[11px] font-bold text-blue-600 hover:text-blue-700 dark:text-blue-400 flex items-center gap-1">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+            + Nuevo Cliente
+          </button>
+        </div>
+        <select id="fiar-directo-cliente-select" required class="w-full mt-1 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm font-semibold">
+          <option value="">-- Cargando clientes... --</option>
+        </select>
+      </div>
+
+      <!-- Alta rápida de cliente fiador -->
+      <div id="fiar-nuevo-cliente-panel" class="hidden p-3 rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 space-y-2.5">
+        <p class="text-xs font-bold text-blue-700 dark:text-blue-300 flex items-center gap-1.5">
+          <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+          Registrar cliente al vuelo
+        </p>
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">Nombre</label>
+          <input id="fiar-nuevo-nombre" type="text" placeholder="Ej: Doña Carmen Ramos" class="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+        </div>
+        <div>
+          <label class="text-[11px] font-bold text-slate-500">Teléfono</label>
+          <input id="fiar-nuevo-telefono" type="tel" placeholder="987 654 321" class="w-full mt-1 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-sm">
+        </div>
+        <div class="flex gap-2">
+          <button type="button" id="btn-cancelar-fiar-nuevo-cliente" class="flex-1 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition">
+            Cancelar
+          </button>
+          <button type="button" id="btn-guardar-fiar-nuevo-cliente" class="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition">
+            Guardar y seleccionar
+          </button>
+        </div>
+      </div>
+
+      <!-- Tarjeta informativa del cliente seleccionado -->
+      <div id="fiar-directo-info-card" class="hidden p-3 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-700 text-xs space-y-1.5">
+        <div class="flex justify-between">
+          <span class="text-slate-400">Deuda actual pendiente:</span>
+          <strong id="fiar-info-saldo-actual" class="text-rose-500 font-bold">S/ 0.00</strong>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-400">Límite de crédito permitido:</span>
+          <span id="fiar-info-limite" class="font-bold text-slate-700 dark:text-slate-300">S/ 0.00</span>
+        </div>
+        <div class="flex justify-between border-t border-slate-200 dark:border-slate-700 pt-1">
+          <span class="font-bold">Nuevo saldo adeudado:</span>
+          <strong id="fiar-info-saldo-nuevo" class="text-amber-600 font-black text-sm">S/ 0.00</strong>
+        </div>
+        <p id="fiar-alerta-sobregiro" class="hidden text-rose-500 font-bold text-[11px] pt-1 flex items-center gap-1">
+          <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+          <span>Advertencia: Esta compra excede el límite de crédito del cliente.</span>
+        </p>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Concepto / Detalle de la Compra</label>
+        <textarea id="fiar-directo-concepto" rows="2" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"></textarea>
+      </div>
+
+      <button type="submit" class="w-full py-3.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-sm shadow-md transition flex items-center justify-center gap-2">
+        <i data-lucide="check" class="w-4 h-4"></i>
+        <span>Confirmar Fiado Directo</span>
+      </button>
+    </form>
+  </div>
+
+  <!-- 14. Modal Escáner de Códigos por Cámara con Fotos -->
+  <div id="modal-camara-scanner" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/70 backdrop-blur-xs"></div>
+    <div class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-5 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-2.5">
+        <h3 class="font-extrabold text-base flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+          <i data-lucide="camera" class="w-5 h-5"></i>
+          <span>Escáner de Mostrador</span>
+        </h3>
+        <button id="btn-cerrar-camara" type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Contenedor del Lector HTML5-QRCode -->
+      <div class="relative rounded-2xl overflow-hidden bg-black aspect-square flex items-center justify-center">
+        <div id="qr-reader" class="w-full h-full"></div>
+        
+        <!-- Línea guía visual de escaneo -->
+        <div class="absolute inset-x-8 top-1/2 -translate-y-1/2 h-0.5 bg-rose-500 shadow-lg shadow-rose-500/80 pointer-events-none animate-pulse"></div>
+      </div>
+
+      <!-- Tarjeta Interactiva de Producto Escaneado (Foto + Nombre + Precio) -->
+      <div id="camara-producto-detectado" class="hidden p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 flex items-center gap-3 animate-bounce-short">
+        <div id="camara-producto-foto-container" class="w-14 h-14 rounded-xl bg-white dark:bg-slate-700 border border-emerald-200 overflow-hidden flex-shrink-0 flex items-center justify-center">
+          <!-- Miniatura de foto del producto -->
+        </div>
+        <div class="flex-1 min-w-0">
+          <span class="text-[10px] uppercase font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+            <i data-lucide="check-circle" class="w-3 h-3"></i> ¡Agregado al Carrito!
+          </span>
+          <h4 id="camara-producto-nombre" class="font-bold text-xs text-slate-900 dark:text-white truncate"></h4>
+          <p id="camara-producto-precio" class="text-sm font-black text-blue-600 dark:text-blue-400"></p>
+        </div>
+      </div>
+
+      <p class="text-[11px] text-center text-slate-400">
+        Apunta la cámara al código de barras del producto. Se agregará automáticamente al carrito.
+      </p>
+
+      <button id="btn-detener-camara" type="button" class="modal-close w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs">
+        Cerrar Cámara
+      </button>
+    </div>
+  </div>
+
+  <!-- 15. Modal Importador Masivo de Productos (Excel / CSV) -->
+  <div id="modal-importar-productos" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <div class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+          <i data-lucide="file-spreadsheet" class="w-5 h-5"></i>
+          <span>Importar Catálogo desde Excel o CSV</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-2xl border border-emerald-200 dark:border-emerald-900/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs">
+        <div>
+          <p class="font-bold text-emerald-800 dark:text-emerald-300">Formatos soportados: .xlsx, .xls, .csv</p>
+          <p class="text-emerald-700 dark:text-emerald-400 text-[11px] mt-0.5">
+            Columnas: Nombre, Categoría, Precio Venta, Precio Costo, Stock, Código de Barras, URL de Imagen.
+          </p>
+        </div>
+        <button id="btn-descargar-plantilla" type="button" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition flex items-center gap-1 shadow-xs whitespace-nowrap">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Descargar Plantilla</span>
+        </button>
+      </div>
+
+      <!-- Selector de Archivo -->
+      <div class="border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl p-6 text-center hover:border-emerald-500 transition cursor-pointer" onclick="document.getElementById('input-archivo-excel').click()">
+        <input id="input-archivo-excel" type="file" accept=".xlsx, .xls, .csv" class="hidden">
+        <i data-lucide="upload-cloud" class="w-10 h-10 mx-auto text-slate-400 mb-2"></i>
+        <p class="text-sm font-bold text-slate-700 dark:text-slate-200">Haz clic aquí para seleccionar tu archivo Excel o CSV</p>
+        <span id="label-archivo-seleccionado" class="text-xs text-slate-400 block mt-1">O arrastra el archivo directamente</span>
+      </div>
+
+      <!-- Tabla de Vista Previa -->
+      <div id="importar-preview-container" class="hidden space-y-2">
+        <div class="flex items-center justify-between text-xs font-bold text-slate-500">
+          <span>Vista Previa de Productos Detectados:</span>
+          <span id="importar-conteo-preview" class="text-emerald-600">0 productos listos</span>
+        </div>
+        <div class="max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-100 dark:bg-slate-900 sticky top-0 text-slate-600 dark:text-slate-400 font-bold">
+              <tr>
+                <th class="p-2">Foto</th>
+                <th class="p-2">Nombre</th>
+                <th class="p-2">Categoría</th>
+                <th class="p-2">P. Venta</th>
+                <th class="p-2">Stock</th>
+                <th class="p-2">Código</th>
+              </tr>
+            </thead>
+            <tbody id="importar-preview-tbody" class="divide-y divide-slate-100 dark:divide-slate-800">
+              <!-- Renderizado dinámico -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="flex gap-2 pt-2">
+        <button id="btn-confirmar-importar" type="button" disabled class="flex-1 py-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-sm shadow-md transition disabled:opacity-40 disabled:cursor-not-allowed">
+          Importar al Catálogo y Supabase
+        </button>
+        <button type="button" class="modal-close px-4 py-3 rounded-2xl bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs">
+          Cancelar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 16. Modal Salida de Caja por Compra a Proveedor -->
+  <div id="modal-compra-proveedor" class="modal-container hidden fixed inset-0 z-50 flex items-center justify-center p-3">
+    <div class="modal-backdrop fixed inset-0 bg-slate-900/60 backdrop-blur-xs"></div>
+    <form id="form-compra-proveedor" class="relative bg-white dark:bg-slate-800 rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-700 space-y-3.5">
+      <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 pb-3">
+        <h3 class="font-extrabold text-base flex items-center gap-2 text-amber-600 dark:text-amber-400">
+          <i data-lucide="truck" class="w-5 h-5"></i>
+          <span>Gasto a Proveedor (Mercadería)</span>
+        </h3>
+        <button type="button" class="modal-close p-1.5 text-slate-400 hover:text-slate-600 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-2xl border border-amber-200 dark:border-amber-900/50 text-[11px] text-amber-800 dark:text-amber-300">
+        <p class="font-bold flex items-center gap-1">💸 Descuento automático de efectivo</p>
+        <p class="mt-0.5">Este dinero saldrá de la caja del turno activo para que el cuadre físico al final del día sea exacto.</p>
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Monto Pagado en Efectivo (S/)</label>
+        <input id="prov-gasto-monto" type="number" step="0.50" placeholder="Ej: 20.00" required class="w-full mt-1 px-4 py-2.5 text-xl font-black rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 focus:ring-2 focus:ring-amber-500 outline-none">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Proveedor / Repartidor</label>
+        <input id="prov-gasto-proveedor" type="text" placeholder="Ej: Repartidor de Queques, Pan Bimbo, Donofrio" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">Detalle de Mercadería Comprada</label>
+        <input id="prov-gasto-detalle" type="text" placeholder="Ej: 10 queques marmoleados para mostrador" required class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs">
+      </div>
+
+      <div>
+        <label class="text-xs font-bold text-slate-500">N° de Boleta o Recibo (Opcional)</label>
+        <input id="prov-gasto-comprobante" type="text" placeholder="Ej: B001-492" class="w-full mt-1 px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-mono">
+      </div>
+
+      <button type="submit" class="w-full py-3.5 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-extrabold text-sm shadow-md transition">
+        Registrar Salida de Efectivo
+      </button>
+    </form>
+  </div>
+
+  <!-- Contenedor Flotante de Toasts de Notificación -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 max-w-sm w-full"></div>
+
+  <!-- Scripts de la Aplicación -->
+  <script src="/js/api.js"></script>
+  <script src="/js/modules/caja.js"></script>
+  <script src="/js/modules/productos.js"></script>
+  <script src="/js/modules/pos.js"></script>
+  <script src="/js/modules/fiados.js"></script>
+  <script src="/js/modules/pedidos.js"></script>
+  <script src="/js/modules/reportes.js"></script>
+  <script src="/js/app.js"></script>
+
+</body>
+</html>

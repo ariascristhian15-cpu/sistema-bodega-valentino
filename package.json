@@ -1,0 +1,27 @@
+{
+  "name": "sistema-bodega-central",
+  "version": "1.0.0",
+  "description": "Sistema Integral de Gestión para Bodegas y Minimarkets con soporte Supabase, POS táctil, Yape/Plin, Libreta de Fiados y Cuadre de Caja",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [
+    "bodega",
+    "pos",
+    "minimarket",
+    "supabase",
+    "yape",
+    "plin",
+    "render"
+  ],
+  "author": "Full-Stack Senior Architect",
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}
