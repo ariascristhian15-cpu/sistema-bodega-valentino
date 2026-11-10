@@ -19,16 +19,21 @@ let supabase = null;
 let isSupabaseConfigured = false;
 
 try {
-  console.log("Intentando conectar a Supabase con URL:", SUPABASE_URL ? SUPABASE_URL.substring(0, 25) + "..." : "VACIA");
   if (SUPABASE_URL && SUPABASE_KEY && String(SUPABASE_URL).startsWith('http')) {
     supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
     isSupabaseConfigured = true;
-    console.log('✅ Supabase Client configurado correctamente.');
-  } else {
-    console.warn('⚠️ Credenciales de Supabase incompletas o inválidas.');
+    
+    // Prueba real de red al arrancar
+    supabase.from('productos').select('id').limit(1).then(({ error }) => {
+      if (error) {
+        console.error('❌ Supabase conectado pero rechazó la consulta:', error.message);
+      } else {
+        console.log('✅ ¡Conexión real con Supabase exitosa y respondiendo!');
+      }
+    });
   }
 } catch (err) {
-  console.error('❌ ERROR CRÍTICO AL CREAR CLIENTE SUPABASE:', err.message);
+  console.error('❌ ERROR CRÍTICO:', err.message);
 }
 function initSupabaseClient(url, key) {
   if (!url || !key || !String(url).startsWith('http')) return false;
