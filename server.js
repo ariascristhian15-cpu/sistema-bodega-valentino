@@ -18,6 +18,18 @@ let SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || 
 let supabase = null;
 let isSupabaseConfigured = false;
 
+try {
+  console.log("Intentando conectar a Supabase con URL:", SUPABASE_URL ? SUPABASE_URL.substring(0, 25) + "..." : "VACIA");
+  if (SUPABASE_URL && SUPABASE_KEY && String(SUPABASE_URL).startsWith('http')) {
+    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+    isSupabaseConfigured = true;
+    console.log('✅ Supabase Client configurado correctamente.');
+  } else {
+    console.warn('⚠️ Credenciales de Supabase incompletas o inválidas.');
+  }
+} catch (err) {
+  console.error('❌ ERROR CRÍTICO AL CREAR CLIENTE SUPABASE:', err.message);
+}
 function initSupabaseClient(url, key) {
   if (!url || !key || !String(url).startsWith('http')) return false;
   supabase = createClient(url, key);
