@@ -409,6 +409,42 @@
           </div>
 
         </div>
+
+        <!-- Historial de Cajas Cerradas (días anteriores) -->
+        <div class="bg-white dark:bg-slate-800 rounded-3xl p-5 border border-slate-200 dark:border-slate-700/60 shadow-sm">
+          <div class="flex items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 class="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                <i data-lucide="history" class="w-5 h-5 text-slate-400"></i>
+                <span>Historial de Cajas</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-0.5">Cortes cerrados de días anteriores con totales de ventas, efectivo y digital.</p>
+            </div>
+            <button id="btn-refrescar-historial-cajas" type="button" class="p-2 text-slate-500 hover:text-blue-600 bg-slate-50 dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 transition" title="Actualizar historial">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <div class="overflow-x-auto -mx-1">
+            <table class="w-full min-w-[640px] text-left">
+              <thead>
+                <tr class="text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100 dark:border-slate-700/80">
+                  <th class="px-3 py-2 font-semibold">Fecha</th>
+                  <th class="px-3 py-2 font-semibold text-right">Total Ventas</th>
+                  <th class="px-3 py-2 font-semibold text-right">Efectivo</th>
+                  <th class="px-3 py-2 font-semibold text-right">Digital</th>
+                  <th class="px-3 py-2 font-semibold text-right">Gastos</th>
+                  <th class="px-3 py-2 font-semibold text-right">Diferencia</th>
+                </tr>
+              </thead>
+              <tbody id="lista-historial-cajas">
+                <tr>
+                  <td colspan="6" class="px-3 py-8 text-center text-sm text-slate-400">Cargando historial…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </section>
 
       <!-- ============================================================================== -->

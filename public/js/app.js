@@ -149,6 +149,7 @@ const App = {
       ReportesModule.cargarResumen();
     } else if (tabName === 'caja') {
       CajaModule.cargarCajaActiva();
+      CajaModule.cargarHistorial();
     } else if (tabName === 'pedidos') {
       PedidosModule.cargarPedidos();
     } else if (tabName === 'fiados') {

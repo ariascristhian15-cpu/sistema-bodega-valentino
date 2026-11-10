@@ -52,6 +52,38 @@ let mockData = {
       diferencia_digital: 0,
       estado: 'abierta',
       observaciones: 'Apertura con sencillo en monedas de S/ 1, S/ 2 y S/ 5'
+    },
+    {
+      id: 'caja-cerrada-02',
+      fecha: new Date(Date.now() - 86400000).toISOString().split('T')[0],
+      hora_apertura: new Date(Date.now() - 86400000 - 36000000).toISOString(),
+      hora_cierre: new Date(Date.now() - 86400000 + 3600000).toISOString(),
+      monto_inicial: 80.00,
+      total_ventas_efectivo: 245.50,
+      total_ventas_digital: 178.00,
+      total_gastos: 22.00,
+      monto_cierre_efectivo: 303.50,
+      monto_cierre_digital: 178.00,
+      diferencia_efectivo: 0,
+      diferencia_digital: 0,
+      estado: 'cerrada',
+      observaciones: 'Corte exacto del día anterior'
+    },
+    {
+      id: 'caja-cerrada-03',
+      fecha: new Date(Date.now() - 172800000).toISOString().split('T')[0],
+      hora_apertura: new Date(Date.now() - 172800000 - 36000000).toISOString(),
+      hora_cierre: new Date(Date.now() - 172800000 + 7200000).toISOString(),
+      monto_inicial: 100.00,
+      total_ventas_efectivo: 312.00,
+      total_ventas_digital: 210.50,
+      total_gastos: 35.00,
+      monto_cierre_efectivo: 372.00,
+      monto_cierre_digital: 210.50,
+      diferencia_efectivo: -5.00,
+      diferencia_digital: 0,
+      estado: 'cerrada',
+      observaciones: 'Faltante menor de S/ 5.00 en efectivo'
     }
   ],
   movimientos_caja: [
@@ -474,14 +506,24 @@ app.get('/api/caja/historial', async (req, res) => {
       const { data, error } = await supabase
         .from('cajas')
         .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
+        .eq('estado', 'cerrada')
+        .order('fecha', { ascending: false })
+        .order('hora_cierre', { ascending: false })
+        .limit(50);
 
       if (error) throw error;
-      return res.json({ cajas: data });
+      return res.json({ cajas: data || [] });
     }
 
-    res.json({ cajas: mockData.cajas });
+    const cerradas = mockData.cajas
+      .filter(c => c.estado === 'cerrada')
+      .sort((a, b) => {
+        const fechaA = new Date(b.hora_cierre || b.fecha).getTime();
+        const fechaB = new Date(a.hora_cierre || a.fecha).getTime();
+        return fechaA - fechaB;
+      });
+
+    res.json({ cajas: cerradas });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

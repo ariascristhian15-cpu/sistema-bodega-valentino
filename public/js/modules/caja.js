@@ -5,9 +5,11 @@
 const CajaModule = {
   cajaActiva: null,
   movimientos: [],
+  historial: [],
 
   async init() {
     await this.cargarCajaActiva();
+    await this.cargarHistorial();
     this.bindEvents();
   },
 
@@ -22,6 +24,87 @@ const CajaModule = {
     } catch (err) {
       console.error('Error al cargar caja:', err);
     }
+  },
+
+  async cargarHistorial() {
+    try {
+      const res = await API.get('/caja/historial');
+      this.historial = res.cajas || [];
+      this.renderizarHistorial();
+    } catch (err) {
+      console.error('Error al cargar historial de cajas:', err);
+      const cont = document.getElementById('lista-historial-cajas');
+      if (cont) {
+        cont.innerHTML = `
+          <tr>
+            <td colspan="6" class="px-3 py-8 text-center text-sm text-rose-500">
+              No se pudo cargar el historial de cajas.
+            </td>
+          </tr>
+        `;
+      }
+    }
+  },
+
+  renderizarHistorial() {
+    const cont = document.getElementById('lista-historial-cajas');
+    if (!cont) return;
+
+    if (!this.historial.length) {
+      cont.innerHTML = `
+        <tr>
+          <td colspan="6" class="px-3 py-8 text-center text-sm text-slate-400">
+            Aún no hay cajas cerradas para mostrar.
+          </td>
+        </tr>
+      `;
+      return;
+    }
+
+    cont.innerHTML = this.historial.map(caja => {
+      const ventasEfe = parseFloat(caja.total_ventas_efectivo) || 0;
+      const ventasDig = parseFloat(caja.total_ventas_digital) || 0;
+      const gastos = parseFloat(caja.total_gastos) || 0;
+      const totalVentas = ventasEfe + ventasDig;
+      const difEfe = parseFloat(caja.diferencia_efectivo) || 0;
+
+      const fechaBase = caja.fecha || caja.hora_cierre || caja.hora_apertura;
+      const fechaLabel = fechaBase
+        ? new Date(fechaBase.includes('T') ? fechaBase : `${fechaBase}T12:00:00`).toLocaleDateString('es-PE', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+          })
+        : '—';
+
+      const horaCierre = caja.hora_cierre
+        ? new Date(caja.hora_cierre).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })
+        : null;
+
+      let difHtml;
+      if (Math.abs(difEfe) < 0.01) {
+        difHtml = `<span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">Cuadre</span>`;
+      } else if (difEfe > 0) {
+        difHtml = `<span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">+S/ ${difEfe.toFixed(2)}</span>`;
+      } else {
+        difHtml = `<span class="inline-flex px-2 py-0.5 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">-S/ ${Math.abs(difEfe).toFixed(2)}</span>`;
+      }
+
+      return `
+        <tr class="border-b border-slate-50 dark:border-slate-700/50 hover:bg-slate-50/80 dark:hover:bg-slate-900/40 transition">
+          <td class="px-3 py-3">
+            <p class="text-sm font-semibold text-slate-800 dark:text-slate-100 capitalize">${fechaLabel}</p>
+            ${horaCierre ? `<span class="text-[11px] text-slate-400">Cierre ${horaCierre}</span>` : ''}
+          </td>
+          <td class="px-3 py-3 text-right text-sm font-black text-slate-900 dark:text-white">S/ ${totalVentas.toFixed(2)}</td>
+          <td class="px-3 py-3 text-right text-sm font-bold text-emerald-600">S/ ${ventasEfe.toFixed(2)}</td>
+          <td class="px-3 py-3 text-right text-sm font-bold text-purple-600">S/ ${ventasDig.toFixed(2)}</td>
+          <td class="px-3 py-3 text-right text-sm font-semibold text-rose-500">S/ ${gastos.toFixed(2)}</td>
+          <td class="px-3 py-3 text-right">${difHtml}</td>
+        </tr>
+      `;
+    }).join('');
   },
 
   async cargarMovimientos() {
@@ -148,6 +231,14 @@ const CajaModule = {
   },
 
   bindEvents() {
+    const btnRefrescarHistorial = document.getElementById('btn-refrescar-historial-cajas');
+    if (btnRefrescarHistorial) {
+      btnRefrescarHistorial.addEventListener('click', async () => {
+        await this.cargarHistorial();
+        showToast('Historial de cajas actualizado', 'info');
+      });
+    }
+
     // Abrir Modal Apertura
     document.querySelectorAll('.btn-abrir-caja-modal').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -320,6 +411,7 @@ const CajaModule = {
 
           showToast(msg, res.difEfectivo === 0 ? 'success' : 'warning', 4500);
           this.actualizarUI();
+          await this.cargarHistorial();
           ReportesModule?.cargarResumen();
         } catch (err) {
           AudioFeedback.error();
