@@ -7,23 +7,66 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuración de Supabase
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || '';
+// Configuración de Supabase (obligatoria para persistencia real)
+// Fallback = mismas credenciales del cliente (public/js/supabase.js) para no caer en memoria volátil
+const DEFAULT_SUPABASE_URL = 'https://ziorhfqxowzhwqqsfxve.supabase.co';
+const DEFAULT_SUPABASE_KEY = 'sb_publishable_JDnQT3CHNIpAXCHYwPng1w_WqFmoY5q';
+
+let SUPABASE_URL = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+let SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || DEFAULT_SUPABASE_KEY;
 
 let supabase = null;
 let isSupabaseConfigured = false;
 
-if (SUPABASE_URL && SUPABASE_KEY && SUPABASE_URL.startsWith('http')) {
-  try {
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-    isSupabaseConfigured = true;
-    console.log('✅ Supabase Client configurado correctamente.');
-  } catch (err) {
-    console.warn('⚠️ Error al inicializar cliente Supabase:', err.message);
+function initSupabaseClient(url, key) {
+  if (!url || !key || !String(url).startsWith('http')) return false;
+  supabase = createClient(url, key);
+  SUPABASE_URL = url;
+  SUPABASE_KEY = key;
+  isSupabaseConfigured = true;
+  return true;
+}
+
+try {
+  if (initSupabaseClient(SUPABASE_URL, SUPABASE_KEY)) {
+    console.log('✅ Supabase Client configurado — persistencia real activa.');
+  } else {
+    console.warn('⚠️ Supabase no configurado. Modo memoria volátil (NO recomendado).');
   }
-} else {
-  console.log('ℹ️ Supabase no configurado en variables de entorno. Iniciando en modo local/fallback.');
+} catch (err) {
+  console.warn('⚠️ Error al inicializar cliente Supabase:', err.message);
+}
+
+/** Incrementa campos numéricos de una caja en Supabase (lectura + escritura directa). */
+async function incrementarCajaSupabase(cajaId, deltas) {
+  if (!isSupabaseConfigured || !cajaId) return;
+  const { data: caja, error } = await supabase.from('cajas').select('*').eq('id', cajaId).single();
+  if (error || !caja) return;
+  const updates = { updated_at: new Date().toISOString() };
+  for (const [campo, delta] of Object.entries(deltas)) {
+    if (!delta) continue;
+    updates[campo] = (parseFloat(caja[campo]) || 0) + delta;
+  }
+  if (Object.keys(updates).length <= 1) return;
+  await supabase.from('cajas').update(updates).eq('id', cajaId);
+}
+
+/** Descuenta stock de productos con UPDATE directo a Supabase (además del trigger). */
+async function descontarStockSupabase(items) {
+  for (const it of items) {
+    if (!it.producto_id) continue;
+    const { data: prod } = await supabase
+      .from('productos')
+      .select('stock_actual')
+      .eq('id', it.producto_id)
+      .single();
+    if (!prod) continue;
+    const nuevoStock = Math.max(0, (parseFloat(prod.stock_actual) || 0) - (parseFloat(it.cantidad) || 0));
+    await supabase
+      .from('productos')
+      .update({ stock_actual: nuevoStock, updated_at: new Date().toISOString() })
+      .eq('id', it.producto_id);
+  }
 }
 
 // Middleware
@@ -45,6 +88,7 @@ let mockData = {
       monto_inicial: 100.00,
       total_ventas_efectivo: 85.50,
       total_ventas_digital: 52.00,
+      total_fiados_otorgados: 0,
       total_gastos: 15.00,
       monto_cierre_efectivo: null,
       monto_cierre_digital: null,
@@ -61,6 +105,7 @@ let mockData = {
       monto_inicial: 80.00,
       total_ventas_efectivo: 245.50,
       total_ventas_digital: 178.00,
+      total_fiados_otorgados: 0,
       total_gastos: 22.00,
       monto_cierre_efectivo: 303.50,
       monto_cierre_digital: 178.00,
@@ -77,6 +122,7 @@ let mockData = {
       monto_inicial: 100.00,
       total_ventas_efectivo: 312.00,
       total_ventas_digital: 210.50,
+      total_fiados_otorgados: 0,
       total_gastos: 35.00,
       monto_cierre_efectivo: 372.00,
       monto_cierre_digital: 210.50,
@@ -277,8 +323,9 @@ app.post('/api/config/supabase', (req, res) => {
     return res.status(400).json({ error: 'URL y Anon Key son requeridos.' });
   }
   try {
-    supabase = createClient(url, key);
-    isSupabaseConfigured = true;
+    if (!initSupabaseClient(url, key)) {
+      return res.status(400).json({ error: 'URL o Key inválidos.' });
+    }
     res.json({ ok: true, message: 'Conectado a Supabase exitosamente' });
   } catch (err) {
     res.status(500).json({ error: 'Error al conectar: ' + err.message });
@@ -301,7 +348,21 @@ app.get('/api/caja/activa', async (req, res) => {
         .maybeSingle();
 
       if (error) throw error;
-      return res.json({ caja: data || null });
+      if (!data) return res.json({ caja: null });
+
+      // Enriquecer con fiados otorgados del turno (columna o suma de ventas fiadas)
+      let totalFiados = parseFloat(data.total_fiados_otorgados);
+      if (Number.isNaN(totalFiados)) {
+        const { data: fiadosVentas } = await supabase
+          .from('ventas')
+          .select('total')
+          .eq('caja_id', data.id)
+          .eq('metodo_pago', 'fiado')
+          .eq('estado', 'completada');
+        totalFiados = (fiadosVentas || []).reduce((s, v) => s + (parseFloat(v.total) || 0), 0);
+      }
+      data.total_fiados_otorgados = totalFiados || 0;
+      return res.json({ caja: data });
     }
 
     const cajaActiva = mockData.cajas.find(c => c.estado === 'abierta') || null;
@@ -357,6 +418,7 @@ app.post('/api/caja/abrir', async (req, res) => {
       monto_inicial: fondo,
       total_ventas_efectivo: 0,
       total_ventas_digital: 0,
+      total_fiados_otorgados: 0,
       total_gastos: 0,
       monto_cierre_efectivo: null,
       monto_cierre_digital: null,

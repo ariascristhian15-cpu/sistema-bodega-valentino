@@ -15,8 +15,9 @@ CREATE TABLE IF NOT EXISTS cajas (
     hora_apertura TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     hora_cierre TIMESTAMPTZ,
     monto_inicial NUMERIC(12, 2) NOT NULL DEFAULT 0.00, -- Sencillo inicial
-    total_ventas_efectivo NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
-    total_ventas_digital NUMERIC(12, 2) NOT NULL DEFAULT 0.00, -- Yape / Plin
+    total_ventas_efectivo NUMERIC(12, 2) NOT NULL DEFAULT 0.00, -- Solo ingresos cobrados (contado + abonos)
+    total_ventas_digital NUMERIC(12, 2) NOT NULL DEFAULT 0.00, -- Yape / Plin cobrados
+    total_fiados_otorgados NUMERIC(12, 2) NOT NULL DEFAULT 0.00, -- Créditos del turno (NO es ingreso)
     total_gastos NUMERIC(12, 2) NOT NULL DEFAULT 0.00, -- Salidas caja chica
     monto_cierre_efectivo NUMERIC(12, 2), -- Conteo físico al cerrar
     monto_cierre_digital NUMERIC(12, 2), -- Total validado en app Yape/Plin
@@ -170,25 +171,9 @@ CREATE INDEX IF NOT EXISTS idx_cajas_estado ON cajas(estado);
 -- FUNCIONES Y TRIGGERS PARA INTEGRIDAD Y AUTOMATIZACIÓN
 -- ==============================================================================
 
--- 1. Descontar Stock automáticamente al registrar detalle de venta
-CREATE OR REPLACE FUNCTION trg_descontar_stock_venta()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.producto_id IS NOT NULL THEN
-        UPDATE productos
-        SET stock_actual = GREATEST(0, stock_actual - NEW.cantidad),
-            updated_at = NOW()
-        WHERE id = NEW.producto_id;
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
+-- 1. Stock: el descuento lo hace la API con UPDATE directo a productos
+--    (evita doble descuento si también hubiera un trigger).
 DROP TRIGGER IF EXISTS trigger_descontar_stock ON detalle_ventas;
-CREATE TRIGGER trigger_descontar_stock
-AFTER INSERT ON detalle_ventas
-FOR EACH ROW
-EXECUTE FUNCTION trg_descontar_stock_venta();
 
 -- 2. Actualizar saldo acumulado del cliente fiado al registrar deuda o abono
 CREATE OR REPLACE FUNCTION trg_actualizar_saldo_cliente()
@@ -219,12 +204,19 @@ AFTER INSERT OR UPDATE OR DELETE ON deudas_fiados
 FOR EACH ROW
 EXECUTE FUNCTION trg_actualizar_saldo_cliente();
 
--- 3. Actualizar totales acumulados de la caja activa al vender
+-- 3. Actualizar totales de caja al vender
+--    - efectivo / yape / plin / mixto → ingresos cobrados
+--    - fiado → solo créditos otorgados (NO suma a efectivo ni digital)
 CREATE OR REPLACE FUNCTION trg_actualizar_totales_caja()
 RETURNS TRIGGER AS $$
 BEGIN
     IF NEW.caja_id IS NOT NULL AND NEW.estado = 'completada' THEN
-        IF NEW.metodo_pago = 'efectivo' THEN
+        IF NEW.metodo_pago = 'fiado' THEN
+            UPDATE cajas
+            SET total_fiados_otorgados = COALESCE(total_fiados_otorgados, 0) + NEW.total,
+                updated_at = NOW()
+            WHERE id = NEW.caja_id;
+        ELSIF NEW.metodo_pago = 'efectivo' THEN
             UPDATE cajas
             SET total_ventas_efectivo = total_ventas_efectivo + NEW.total,
                 updated_at = NOW()
@@ -252,7 +244,10 @@ AFTER INSERT ON ventas
 FOR EACH ROW
 EXECUTE FUNCTION trg_actualizar_totales_caja();
 
--- 4. Actualizar total de gastos de caja chica y compras a proveedores
+-- 4. Nota: los abonos de fiados actualizan la caja desde la API (server.js)
+--    para evitar doble conteo. El monto del abono SÍ suma a ingresos cobrados.
+
+-- 5. Actualizar total de gastos de caja chica y compras a proveedores
 CREATE OR REPLACE FUNCTION trg_actualizar_gastos_caja()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -357,6 +352,7 @@ CREATE POLICY "Permitir todo a pedidos_proveedor" ON pedidos_proveedor FOR ALL U
 -- MIGRACIÓN / ACTUALIZACIONES PARA BASES DE DATOS EXISTENTES
 -- ==============================================================================
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS imagen_url TEXT;
+ALTER TABLE cajas ADD COLUMN IF NOT EXISTS total_fiados_otorgados NUMERIC(12, 2) NOT NULL DEFAULT 0.00;
 
 ALTER TABLE movimientos_caja DROP CONSTRAINT IF EXISTS movimientos_caja_tipo_check;
 ALTER TABLE movimientos_caja ADD CONSTRAINT movimientos_caja_tipo_check 
