@@ -1,57 +1,176 @@
 const express = require('express');
 const cors = require('cors');
+const dns = require('dns');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
+// En Render, undici (el fetch de Node) puede intentar IPv6 primero y fallar con
+// "TypeError: fetch failed" aunque el dominio sea correcto. Forzamos IPv4.
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch (_) {
+  // Versiones antiguas de Node no soportan esta opción; no es bloqueante.
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
+const SUPABASE_TIMEOUT_MS = parseInt(process.env.SUPABASE_TIMEOUT_MS, 10) || 15000;
 
-// Configuración de Supabase (obligatoria para persistencia real)
-// Fallback = mismas credenciales del cliente (public/js/supabase.js) para no caer en memoria volátil
-const DEFAULT_SUPABASE_URL = 'https://ziorhfqxowzhwqqsfxve.supabase.co';
-const DEFAULT_SUPABASE_KEY = 'sb_publishable_JDnQT3CHNIpAXCHYwPng1w_WqFmoY5q';
+// ==============================================================================
+// CONFIGURACIÓN DE SUPABASE (única fuente de verdad: variables de entorno)
+// ==============================================================================
 
-let SUPABASE_URL = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-let SUPABASE_KEY = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY || DEFAULT_SUPABASE_KEY;
+/** Limpia espacios/comillas y valida la URL del proyecto Supabase. */
+function normalizarUrlSupabase(valor) {
+  if (!valor) return { url: null, error: 'SUPABASE_URL no está definida.' };
+
+  let limpia = String(valor).trim().replace(/^["']|["']$/g, '').replace(/\/+$/, '');
+  // Errores típicos al copiar la URL desde el panel de Supabase
+  limpia = limpia.replace(/\/rest\/v1$/i, '').replace(/\/auth\/v1$/i, '');
+
+  let parsed;
+  try {
+    parsed = new URL(limpia);
+  } catch {
+    return { url: null, error: `SUPABASE_URL no es una URL válida: "${String(valor).slice(0, 60)}"` };
+  }
+  if (parsed.protocol !== 'https:') {
+    return { url: null, error: 'SUPABASE_URL debe empezar con https://' };
+  }
+  if (!parsed.hostname || !parsed.hostname.includes('.')) {
+    return { url: null, error: `SUPABASE_URL tiene un host inválido: "${parsed.hostname}"` };
+  }
+  return { url: parsed.origin, host: parsed.hostname };
+}
+
+/** Limpia la API key y detecta su tipo (para no exponer una secret key por error). */
+function normalizarKeySupabase(valor) {
+  if (!valor) return { key: null, tipo: null, error: 'SUPABASE_ANON_KEY no está definida.' };
+
+  const key = String(valor).trim().replace(/^["']|["']$/g, '');
+  let tipo = 'desconocida';
+  if (key.startsWith('sb_publishable_')) tipo = 'publishable';
+  else if (key.startsWith('sb_secret_')) tipo = 'secret';
+  else if (key.startsWith('eyJ')) tipo = 'jwt-legacy';
+
+  return { key, tipo };
+}
+
+const urlInfo = normalizarUrlSupabase(process.env.SUPABASE_URL);
+const keyInfo = normalizarKeySupabase(process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY);
+
+let SUPABASE_URL = urlInfo.url;
+let SUPABASE_KEY = keyInfo.key;
+let supabaseKeyTipo = keyInfo.tipo;
 
 let supabase = null;
 let isSupabaseConfigured = false;
 
-try {
-  if (SUPABASE_URL && SUPABASE_KEY && String(SUPABASE_URL).startsWith('http')) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-    isSupabaseConfigured = true;
-    
-    // Prueba real de red al arrancar
-    supabase.from('productos').select('id').limit(1).then(({ error }) => {
-      if (error) {
-        console.error('❌ Supabase conectado pero rechazó la consulta:', error.message);
-      } else {
-        console.log('✅ ¡Conexión real con Supabase exitosa y respondiendo!');
-      }
-    });
-  }
-} catch (err) {
-  console.error('❌ ERROR CRÍTICO:', err.message);
+/** fetch con timeout: evita que una caída de red deje la API colgada. */
+function fetchConTimeout(ms) {
+  return (input, init = {}) => fetch(input, { ...init, signal: init.signal || AbortSignal.timeout(ms) });
 }
+
+function crearClienteSupabase(url, key) {
+  return createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    global: {
+      fetch: fetchConTimeout(SUPABASE_TIMEOUT_MS),
+      headers: { 'X-Client-Info': 'bodega-valentino/1.0' }
+    }
+  });
+}
+
+/**
+ * Convierte el genérico "TypeError: fetch failed" de undici en un mensaje
+ * accionable, con el código real de red (ENOTFOUND, ECONNREFUSED, etc.).
+ */
+function describirErrorSupabase(err) {
+  const mensaje = String(err?.message || err || 'Error desconocido');
+  const detalle = `${err?.details || ''} ${err?.hint || ''} ${err?.cause?.code || ''} ${err?.cause?.message || ''}`;
+
+  // Credencial rechazada por Supabase (key de otro proyecto o revocada)
+  if (/invalid api key|no api key|invalid jwt|jwt expired/i.test(mensaje)) {
+    return `Supabase rechazó la credencial: ${mensaje}. Verifica que SUPABASE_ANON_KEY sea la publishable/anon key del MISMO proyecto que SUPABASE_URL.`;
+  }
+
+  // Esquema no aplicado en el proyecto
+  if (/relation .* does not exist|schema cache/i.test(mensaje)) {
+    return `La tabla consultada no existe en Supabase (${mensaje}). Ejecuta supabase/schema.sql en el SQL Editor del proyecto.`;
+  }
+
+  if (mensaje.includes('fetch failed')) {
+    const code = (detalle.match(/(ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|CERT_[A-Z_]+|UND_ERR_[A-Z_]+)/) || [])[1] || '';
+    const host = SUPABASE_URL ? new URL(SUPABASE_URL).hostname : '(sin URL)';
+    const pistas = {
+      ENOTFOUND: `el dominio "${host}" no existe. Revisa que SUPABASE_URL no tenga un carácter de menos/sobrante.`,
+      EAI_AGAIN: `el DNS de Render no pudo resolver "${host}". Reintenta el deploy o corrige SUPABASE_URL.`,
+      ECONNREFUSED: `la conexión a "${host}" fue rechazada. El proyecto puede estar pausado o la URL es incorrecta.`,
+      ECONNRESET: 'la conexión se cortó a mitad de la petición (red inestable).',
+      ETIMEDOUT: 'la conexión agotó el tiempo de espera. El proyecto puede estar pausado.'
+    };
+    return `No se pudo conectar con Supabase: ${pistas[code] || 'fallo de red/DNS'}${code ? ` [${code}]` : ''}`;
+  }
+  return mensaje;
+}
+
+/** Respuesta de error uniforme para todas las rutas de la API. */
+function responderError(res, err) {
+  const descripcion = describirErrorSupabase(err);
+  console.error('❌ Error en API:', descripcion, err?.details || err?.hint || '');
+  return res.status(500).json({
+    error: descripcion,
+    mode: isSupabaseConfigured ? 'supabase' : 'local-mock'
+  });
+}
+
 function initSupabaseClient(url, key) {
-  if (!url || !key || !String(url).startsWith('http')) return false;
-  supabase = createClient(url, key);
-  SUPABASE_URL = url;
-  SUPABASE_KEY = key;
+  const u = normalizarUrlSupabase(url);
+  const k = normalizarKeySupabase(key);
+  if (!u.url) throw new Error(u.error);
+  if (!k.key) throw new Error(k.error);
+
+  supabase = crearClienteSupabase(u.url, k.key);
+  SUPABASE_URL = u.url;
+  SUPABASE_KEY = k.key;
+  supabaseKeyTipo = k.tipo;
   isSupabaseConfigured = true;
-  return true;
+  return supabase;
 }
 
 try {
-  if (initSupabaseClient(SUPABASE_URL, SUPABASE_KEY)) {
-    console.log('✅ Supabase Client configurado — persistencia real activa.');
-  } else {
-    console.warn('⚠️ Supabase no configurado. Modo memoria volátil (NO recomendado).');
+  initSupabaseClient(SUPABASE_URL, SUPABASE_KEY);
+  console.log(`✅ Cliente Supabase inicializado → ${new URL(SUPABASE_URL).hostname} (key: ${supabaseKeyTipo})`);
+  if (supabaseKeyTipo === 'secret') {
+    console.warn('🚨 Estás usando una SECRET KEY en el servidor web. Usa la publishable/anon key.');
   }
 } catch (err) {
-  console.warn('⚠️ Error al inicializar cliente Supabase:', err.message);
+  console.warn('⚠️ Supabase no configurado:', err.message);
+  console.warn('⚠️ La app arrancará en modo memoria volátil (los datos NO se guardan).');
+}
+
+const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Prueba real de red al arrancar, con reintentos (Render tarda en calentar DNS). */
+async function probarConexionSupabase(intentos = 3) {
+  if (!isSupabaseConfigured) return false;
+  const host = new URL(SUPABASE_URL).hostname;
+
+  for (let i = 1; i <= intentos; i++) {
+    const inicio = Date.now();
+    const { error } = await supabase.from('productos').select('id').limit(1);
+
+    if (!error) {
+      console.log(`✅ Conexión real con Supabase OK (${host}) en ${Date.now() - inicio} ms`);
+      return true;
+    }
+    console.error(`❌ Intento ${i}/${intentos} falló: ${describirErrorSupabase(error)}`);
+    if (i < intentos) await esperar(1500 * i);
+  }
+
+  console.error('🚨 Supabase está configurado pero no responde. Diagnóstico: GET /api/health/supabase');
+  return false;
 }
 
 /** Incrementa campos numéricos de una caja en Supabase (lectura + escritura directa). */
@@ -324,28 +443,99 @@ let mockData = {
 // RUTAS DE ESTADO Y CONFIGURACIÓN
 // ==============================================================================
 app.get('/api/status', (req, res) => {
+  let host = null;
+  try {
+    host = SUPABASE_URL ? new URL(SUPABASE_URL).hostname : null;
+  } catch (_) {}
+
   res.json({
     ok: true,
     supabaseConfigured: isSupabaseConfigured,
-    supabaseUrl: SUPABASE_URL ? `${SUPABASE_URL.substring(0, 15)}...` : null,
+    // Host completo (antes se truncaba y ocultaba errores de tipeo en la URL)
+    supabaseHost: host,
+    supabaseKeyType: supabaseKeyTipo,
     mode: isSupabaseConfigured ? 'supabase' : 'local-mock',
+    node: process.version,
     serverTime: new Date().toISOString()
   });
 });
 
-// Guardar credenciales de Supabase en tiempo de ejecución (opcional desde la interfaz)
-app.post('/api/config/supabase', (req, res) => {
-  const { url, key } = req.body;
-  if (!url || !key) {
-    return res.status(400).json({ error: 'URL y Anon Key son requeridos.' });
+// Diagnóstico detallado de red: GET /api/health/supabase
+app.get('/api/health/supabase', async (req, res) => {
+  if (!isSupabaseConfigured) {
+    return res.status(503).json({ ok: false, error: 'Supabase no está configurado (faltan SUPABASE_URL/SUPABASE_ANON_KEY).' });
   }
+
+  const host = new URL(SUPABASE_URL).hostname;
+  let dnsInfo;
   try {
-    if (!initSupabaseClient(url, key)) {
-      return res.status(400).json({ error: 'URL o Key inválidos.' });
-    }
-    res.json({ ok: true, message: 'Conectado a Supabase exitosamente' });
+    dnsInfo = await dns.promises.lookup(host, { all: true });
   } catch (err) {
-    res.status(500).json({ error: 'Error al conectar: ' + err.message });
+    dnsInfo = { error: err.code || err.message };
+  }
+
+  const inicio = Date.now();
+  const { error } = await supabase.from('productos').select('id').limit(1);
+  const latenciaMs = Date.now() - inicio;
+
+  res.status(error ? 502 : 200).json({
+    ok: !error,
+    host,
+    keyType: supabaseKeyTipo,
+    dns: dnsInfo,
+    latenciaMs,
+    error: error ? describirErrorSupabase(error) : null,
+    detalleOriginal: error ? String(error.message || '') : null,
+    node: process.version
+  });
+});
+
+// Configuración pública para el navegador (nunca expone una secret key)
+app.get('/api/config/public', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!isSupabaseConfigured) {
+    return res.status(503).json({ url: null, key: null, error: 'Supabase no configurado en el servidor.' });
+  }
+  if (supabaseKeyTipo === 'secret') {
+    return res.status(409).json({ url: null, key: null, error: 'El servidor usa una secret key; no se expone al navegador.' });
+  }
+  res.json({ url: SUPABASE_URL, key: SUPABASE_KEY });
+});
+
+// Actualizar credenciales en tiempo de ejecución (se validan ANTES de aplicarlas)
+app.post('/api/config/supabase', async (req, res) => {
+  const { url, key } = req.body || {};
+
+  const u = normalizarUrlSupabase(url);
+  const k = normalizarKeySupabase(key);
+  if (!u.url) return res.status(400).json({ error: u.error });
+  if (!k.key) return res.status(400).json({ error: k.error });
+
+  // Evita SSRF: solo se permiten URLs de proyectos Supabase
+  if (!/\.supabase\.(co|in)$/i.test(u.host)) {
+    return res.status(400).json({ error: 'La URL debe ser de un proyecto Supabase (*.supabase.co).' });
+  }
+
+  try {
+    const cliente = crearClienteSupabase(u.url, k.key);
+    const { error } = await cliente.from('productos').select('id').limit(1);
+    if (error) {
+      return res.status(400).json({ error: 'No se pudo verificar la conexión: ' + describirErrorSupabase(error) });
+    }
+
+    supabase = cliente;
+    SUPABASE_URL = u.url;
+    SUPABASE_KEY = k.key;
+    supabaseKeyTipo = k.tipo;
+    isSupabaseConfigured = true;
+
+    res.json({
+      ok: true,
+      message: `Conectado a ${u.host} correctamente`,
+      persistencia: 'temporal (se pierde al reiniciar el servicio; configura las variables en Render)'
+    });
+  } catch (err) {
+    responderError(res, err);
   }
 });
 
@@ -385,7 +575,7 @@ app.get('/api/caja/activa', async (req, res) => {
     const cajaActiva = mockData.cajas.find(c => c.estado === 'abierta') || null;
     res.json({ caja: cajaActiva });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -447,7 +637,7 @@ app.post('/api/caja/abrir', async (req, res) => {
     mockData.cajas.unshift(nuevaCaja);
     res.json({ ok: true, caja: nuevaCaja });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -510,7 +700,7 @@ app.post('/api/caja/cerrar', async (req, res) => {
 
     res.json({ ok: true, caja, esperadoEfectivo, esperadoDigital, difEfectivo, difDigital });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -552,7 +742,7 @@ app.post('/api/caja/movimiento', async (req, res) => {
 
     res.json({ ok: true, movimiento: mov });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -574,7 +764,7 @@ app.get('/api/caja/:caja_id/movimientos', async (req, res) => {
     const lista = mockData.movimientos_caja.filter(m => m.caja_id === caja_id);
     res.json({ movimientos: lista });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -604,7 +794,7 @@ app.get('/api/caja/historial', async (req, res) => {
 
     res.json({ cajas: cerradas });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -626,7 +816,7 @@ app.get('/api/productos', async (req, res) => {
 
     res.json({ productos: mockData.productos.filter(p => p.activo) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -665,7 +855,7 @@ app.post('/api/productos', async (req, res) => {
     mockData.productos.push(nuevoProd);
     res.json({ ok: true, producto: nuevoProd });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -736,7 +926,7 @@ app.post('/api/productos/bulk', async (req, res) => {
 
     res.json({ ok: true, count, productos: mockData.productos });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -766,7 +956,7 @@ app.put('/api/productos/:id', async (req, res) => {
     mockData.productos[index] = { ...mockData.productos[index], ...updates };
     res.json({ ok: true, producto: mockData.productos[index] });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -787,7 +977,7 @@ app.delete('/api/productos/:id', async (req, res) => {
     if (prod) prod.activo = false;
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -959,7 +1149,7 @@ app.post('/api/ventas', async (req, res) => {
     mockData.ventas.unshift(venta);
     res.json({ ok: true, venta, items: venta.detalles, deuda: deudaMock });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -991,7 +1181,7 @@ app.get('/api/ventas', async (req, res) => {
     }
     res.json({ ventas: list.slice(0, limitCount) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1018,7 +1208,7 @@ app.get('/api/fiados/clientes', async (req, res) => {
     }));
     res.json({ clientes: conDeudas });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1052,7 +1242,7 @@ app.post('/api/fiados/clientes', async (req, res) => {
     mockData.clientes_fiados.push(nuevo);
     res.json({ ok: true, cliente: nuevo });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1101,7 +1291,7 @@ app.post('/api/fiados/deudas', async (req, res) => {
 
     res.json({ ok: true, deuda: nuevaDeuda });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1202,7 +1392,7 @@ app.post('/api/fiados/abonos', async (req, res) => {
 
     res.json({ ok: true, abono: nuevoAbono });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1223,7 +1413,7 @@ app.get('/api/pedidos', async (req, res) => {
 
     res.json({ pedidos: mockData.pedidos_proveedor });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1257,7 +1447,7 @@ app.post('/api/pedidos', async (req, res) => {
     mockData.pedidos_proveedor.unshift(nuevoItem);
     res.json({ ok: true, pedido: nuevoItem });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1303,7 +1493,7 @@ app.put('/api/pedidos/:id/estado', async (req, res) => {
 
     res.json({ ok: true, pedido: item });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1384,7 +1574,7 @@ app.get('/api/reportes/resumen', async (req, res) => {
       cajaActiva
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    responderError(res, err);
   }
 });
 
@@ -1393,11 +1583,19 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Iniciar servidor
+// Iniciar servidor: el puerto se abre de inmediato (Render exige respuesta rápida)
+// y la verificación de Supabase corre en segundo plano, sin poder tumbar el proceso.
 app.listen(PORT, () => {
   console.log(`=======================================================`);
   console.log(`🚀 Sistema de Gestión Bodega activo en puerto: ${PORT}`);
   console.log(`📍 URL local: http://localhost:${PORT}`);
   console.log(`📡 Modo de datos: ${isSupabaseConfigured ? 'Supabase Cloud (PostgreSQL)' : 'Local Fallback / Standby'}`);
+  if (isSupabaseConfigured) {
+    console.log(`🔎 Diagnóstico: http://localhost:${PORT}/api/health/supabase`);
+  }
   console.log(`=======================================================`);
+
+  probarConexionSupabase().catch((err) => {
+    console.error('❌ La verificación de Supabase falló:', describirErrorSupabase(err));
+  });
 });

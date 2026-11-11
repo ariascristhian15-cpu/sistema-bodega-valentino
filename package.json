@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Sistema Integral de Gestión para Bodegas y Minimarkets con soporte Supabase, POS táctil, Yape/Plin, Libreta de Fiados y Cuadre de Caja",
   "main": "server.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js"

@@ -5,6 +5,7 @@ services:
     plan: free
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /api/status
     autoDeploy: true
     envVars:
       - key: NODE_ENV
